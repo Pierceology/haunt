@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- goodbye:inject (jnoirbranding.com puts <base href> and window.GOODBYE_API here) -->
+<script>if (!window.GOODBYE_API && /((^|\.)github\.io|^haunt\.jnoirbranding\.com)$/.test(location.hostname)) window.GOODBYE_API = 'https://www.jnoirbranding.com/_functions/';</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-visual">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GOODBYE">
+<meta name="format-detection" content="telephone=no">
+<title>GOODBYE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=IM+Fell+English+SC&family=IM+Fell+English:ital@0;1&family=Cedarville+Cursive&family=Pirata+One&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Outfit:wght@300;500&family=Bodoni+Moda&family=Caprasimo&family=Abril+Fatface&family=Fredericka+the+Great&display=swap">
+<style>
+/* Layout: one full-bleed stage. The board is the interface; everything else is paper on the table or light in the room.
+   One deliberate look: night. Gold is reserved for Him and appears only in His moments. */
+:root {
+  --night: #070608;
+  --wax: #e9dcb8;
+  --ash: #8f877a;
+  --bruise: #2a2030;
+  --mildew: #46513f;
+  --ember: #c4582c;
+  --paper: #ece1c4;
+  --pencil: #3a3732;
+  --gold: #f2c46a;
+  --gold-deep: #a8741f;
+  --display: 'Cinzel', 'Trajan Pro', Georgia, serif;
+  --print: 'IM Fell English SC', 'IM Fell English', Georgia, serif;
+  --fell: 'IM Fell English', Georgia, serif;
+  --hand: 'Cedarville Cursive', 'Segoe Script', 'Bradley Hand', cursive;
+  --demon: 'Pirata One', 'UnifrakturMaguntia', Georgia, serif;
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night); color: var(--wax); }
+body { font: 15px/1.4 var(--fell); -webkit-tap-highlight-color: transparent; }
+canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+canvas#c:active { cursor: grabbing; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--wax); outline-offset: 3px; }
+
+/* ---------- top: where you are, and the transcript ---------- */
+#hud { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 12px); left: calc(env(safe-area-inset-left, 0px) + 16px); right: calc(env(safe-area-inset-right, 0px) + 16px); display: flex; justify-content: space-between; align-items: center; gap: 12px; z-index: 10; transition: opacity .6s; pointer-events: none; }
+#hud.dim { opacity: 0; }
+/* nothing on screen but the table: the HUD (the full-screen button) is gone from the match to the title */
+body.night #hud { display: none !important; }
+#hud button { pointer-events: auto; background: rgba(7,6,8,.55); border: 1px solid rgba(233,220,184,.18); border-radius: 999px; padding: 7px 14px; font-family: var(--print); letter-spacing: .08em; font-size: 13px; color: var(--wax); cursor: pointer; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+#hud button { position: relative; white-space: nowrap; }
+#hud button::before, #pew .agp-back::before, #pew .agp-btn-skip::before { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
+/* a plain label pill (the place name is a button now, styled by #hud button) */
+#hud .pill { position: relative; white-space: nowrap; background: rgba(7,6,8,.55); border: 1px solid rgba(233,220,184,.18); border-radius: 999px; padding: 7px 14px; font-family: var(--print); letter-spacing: .08em; font-size: 13px; color: var(--wax); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); pointer-events: none; cursor: default; }
+#transcript { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 54px); left: 16px; right: 16px; z-index: 9; text-align: center; pointer-events: none; display: grid; gap: 2px; }
+#tq { font-family: var(--hand); font-size: clamp(18px, 2.2vw, 24px); color: rgba(233,220,184,.72); min-height: 1.3em; }
+#ta { font-family: var(--print); font-size: clamp(18px, 2.4vw, 28px); letter-spacing: .32em; color: var(--wax); min-height: 1.3em; text-shadow: 0 0 18px rgba(255,170,90,.25); }
+#ta span { animation: letter .5s ease-out both; }
+/* a long line builds as it is spelled (2026-10-05: forty letters, fast): tighter, so a whole phrase reads at once */
+#ta[data-len="mid"] { letter-spacing: .2em; }
+#ta[data-len="long"] { letter-spacing: .12em; }
+body[data-scene="port"] #ta[data-len="mid"] { letter-spacing: .16em; }
+body[data-scene="port"] #ta[data-len="long"] { letter-spacing: .08em; font-size: 18px; line-height: 1.3; }
+#ta.hint { font-family: var(--fell); font-style: italic; letter-spacing: .02em; font-size: 16px; color: var(--ash); }
+/* the transcript is one ink all night: no colour for the mood, none for the dread, nothing written in red */
+/* the fake calm: plain pencil, nothing else */
+#tq.plain { font-family: var(--fell); font-style: italic; font-size: 17px; color: var(--ash); }
+body.daylight #tq, body.daylight #ta { text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 22px rgba(0,0,0,.75); }
+/* Do as I do: your taps in pencil grey, the wall's raps in full, the one nobody tapped in red */
+#ta span.tap { color: var(--ash); }
+#ta span.rap { letter-spacing: .5em; }
+#ta span.rap.extra { color: #b8473a; text-shadow: 0 0 12px rgba(184,71,58,.5); }
+/* It Is Written: what the demon spelled is struck through, in gold */
+#ta span.struck { text-decoration: line-through; text-decoration-color: var(--gold); text-decoration-thickness: 2px; opacity: .4; transition: opacity .5s; }
+/* the Garden's ending: the reference, small and quiet */
+#tref { font-family: var(--print); font-size: 13px; letter-spacing: .24em; color: rgba(233,220,184,.6); margin-top: 6px; animation: fadeUp 1.6s both; }
+body.daylight #tref { color: rgba(255,246,226,.9); text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 14px rgba(0,0,0,.7); }
+@keyframes letter { from { opacity: 0; filter: blur(6px); } to { opacity: 1; filter: none; } }
+
+/* ---------- bottom: the pencil note on the wood, and the question box ---------- */
+#dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 6px 16px calc(env(safe-area-inset-bottom, 0px) + 14px); display: grid; gap: 8px; justify-items: center; background: linear-gradient(to top, rgba(7,6,8,.8), rgba(7,6,8,0)); opacity: 0; transform: translateY(16px); transition: opacity .8s, transform .8s; pointer-events: none; }
+body.playing #dock { opacity: 1; transform: none; pointer-events: auto; }
+/* one line in pencil, in the ghost's hand, written on the wood; tapping it asks it */
+#note { background: none; border: 0; padding: 8px 12px; min-height: 44px; max-width: min(560px, 100%); font-family: var(--hand); font-size: clamp(21px, 2.3vw, 26px); line-height: 1.15; color: rgba(205,196,178,.78); text-shadow: 0 1px 0 rgba(0,0,0,.6), 0 0 14px rgba(0,0,0,.7); transform: rotate(-1.2deg); cursor: pointer; transition: color .8s, text-shadow .8s, opacity .4s; text-align: center; }
+#note:hover { color: rgba(233,224,204,.92); }
+#note.erasing { color: transparent; text-shadow: 0 0 7px rgba(205,196,178,.45); }
+#note.red { color: #b0242a; text-shadow: 0 1px 0 rgba(0,0,0,.5); letter-spacing: .01em; }
+#note.red .w { display: inline-block; white-space: nowrap; }
+#note.red .w span { display: inline-block; transform: translateY(var(--y)) rotate(var(--r)); text-shadow: .4px .3px 0 rgba(176,36,42,.5), -.3px -.2px 0 rgba(176,36,42,.35); }
+#note.red.writing .w span { animation: pencil .32s var(--d) both; }
+@keyframes pencil { from { opacity: 0; transform: translateY(var(--y)) rotate(var(--r)) scale(.6); } to { opacity: 1; transform: translateY(var(--y)) rotate(var(--r)); } }
+/* the dare, along the board's lower margin (game.js places it on the board every frame) */
+/* the dare is drawn into the board's margin (game.js drawDare); this is its stand-in for a keyboard and a screen
+   reader only: invisible, and touches go through it to the board, which never lets it take one meant for the planchette */
+#dare { position: fixed; left: 0; top: 0; z-index: 9; background: none; border: 0; padding: 0; margin: 0; overflow: hidden; font-size: 1px; color: transparent; pointer-events: none; transform-origin: 0 0; }
+#dare:focus-visible { outline: 1px dashed rgba(214,205,186,.5); outline-offset: 2px; }
+#askform { display: flex; gap: 8px; width: min(520px, 100%); }
+/* the box is centred under the board: on a wide screen the word 'ask' hangs off its right end instead of pushing the box left of the middle */
+@media (min-width: 721px) { body:not(.short) #askform { position: relative; } body:not(.short) #askform button { position: absolute; left: 100%; top: 50%; margin-left: 4px; transform: translateY(-50%) rotate(-1.5deg); } }
+#q { flex: 1 1 auto; min-width: 0; background: rgba(236,225,196,.07); border: 1px solid rgba(233,220,184,.2); border-radius: 999px; color: var(--wax); font-family: var(--fell); font-style: italic; font-size: 16px; padding: 10px 16px; }
+#q::placeholder { color: var(--ash); }
+/* send is the return key; the button is only a word in pencil on the wood, not a pill */
+#askform button { flex: 0 0 auto; background: none; color: rgba(205,196,178,.7); border: 0; border-radius: 0; padding: 6px 8px; font-family: var(--hand); font-size: 24px; line-height: 1; letter-spacing: 0; cursor: pointer; text-shadow: 0 1px 0 rgba(0,0,0,.6), 0 0 12px rgba(0,0,0,.7); transform: rotate(-1.5deg); }
+#askform button:hover { color: rgba(233,224,204,.95); }
+#askform button:disabled, #q:disabled { opacity: .4; }
+#q.ghost { color: #c0392b; font-style: normal; font-family: var(--print); letter-spacing: .18em; text-shadow: 0 0 10px rgba(192,57,43,.45); }
+
+/* ---------- the intro: strike a match ---------- */
+#intro { position: fixed; inset: 0; z-index: 40; display: grid; place-content: center; justify-items: center; gap: 18px; padding: 24px 16px; text-align: center; background: #000; transition: opacity 1.6s; }
+#intro.out { opacity: 0; pointer-events: none; }
+#intro h1 { margin: 0; font-family: var(--print); font-weight: 400; font-size: clamp(36px, 12vw, 150px); letter-spacing: .14em; color: var(--wax); line-height: .9; white-space: nowrap; text-shadow: 0 0 40px rgba(255,160,80,.18); }
+#intro h1 span { display: inline-block; width: .5em; height: .7em; position: relative; }
+/* a burnt match stands between GOOD and BYE (its poster is the dead match); "Strike a match" strikes it on the screen (match-strike.mp4 on black,
+   screened: only the match, the fingers fade out). While it strikes, the rest of the title steps back; when it burns, the title dissolves
+   into the walk up the drive. */
+#matchOut { position: absolute; left: 50%; bottom: -.75em; height: 2em; width: calc(2em * 16 / 9); max-width: none; transform: translateX(calc(-50% - .097em)); clip-path: inset(0 40.2% 0 45.7%); -webkit-mask-image: linear-gradient(to bottom, transparent, #000 7%, #000 42%, transparent 56%); mask-image: linear-gradient(to bottom, transparent, #000 7%, #000 42%, transparent 56%); mix-blend-mode: screen; pointer-events: none; }
+#intro.striking > :not(h1) { opacity: 0; pointer-events: none; transition: opacity .5s; }
+#intro.leaving { opacity: 0; pointer-events: none; transition-duration: .9s; }
+#intro .sub { margin: 0; font-family: var(--fell); font-style: italic; color: var(--ash); font-size: 17px; }
+#strike { margin-top: 10px; background: transparent; border: 1px solid rgba(233,220,184,.35); border-radius: 999px; padding: 12px 26px; font-family: var(--hand); font-size: 24px; color: var(--wax); cursor: pointer; transition: background .3s, border-color .3s; }
+#strike:hover:not(:disabled) { background: rgba(233,220,184,.08); border-color: var(--wax); }
+#strike:disabled { opacity: .5; cursor: progress; }
+#fsIntro { background: transparent; border: 0; color: var(--ash); font-family: var(--print); letter-spacing: .14em; font-size: 13px; text-transform: uppercase; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; padding: 10px 14px; }
+#fsIntro:hover { color: var(--wax); }
+#intro #wayOut { margin: -6px 0 0; font-size: 15px; max-width: 24em; text-wrap: balance; }
+#intro #passed { margin: -4px 0 0; font-family: var(--print); letter-spacing: .14em; color: var(--wax); font-size: clamp(15px, 1.8vw, 18px); animation: fadeUp 2s 1.2s both; }
+#intro #help, #intro #helpHome { margin: -4px 0 0; max-width: 30em; font-family: var(--fell); color: var(--wax); font-size: 17px; line-height: 1.45; }
+#intro #still { margin: -4px 0 0; font-family: var(--fell); font-style: italic; color: #b9a99a; font-size: clamp(17px, 2.2vw, 22px); animation: fadeUp 2.4s .6s both; }
+#share .index { width: min(440px, 100%); box-sizing: border-box; display: grid; gap: 14px; background: var(--paper); color: var(--pencil); border-radius: 3px; padding: 26px 22px 20px; transform: rotate(-1.2deg); box-shadow: 0 18px 50px rgba(0,0,0,.8), 0 0 80px rgba(255,160,80,.05); background-image: linear-gradient(to bottom, transparent 22px, rgba(190,60,60,.45) 22px, rgba(190,60,60,.45) 23px, transparent 23px), repeating-linear-gradient(to bottom, transparent 0 33px, rgba(70,110,170,.22) 33px 34px); }
+@keyframes cardIn { from { opacity: 0; transform: translateY(14px) rotate(-3deg); } to { opacity: 1; transform: rotate(-1.2deg); } }
+/* the card before the title (2026-10-05, Pierce: "we can even have a nice warning screen beforehand"): one index card, pencil on paper,
+   the way a film opens on a title card. A touch goes on; a return visit's card goes by itself after a moment. */
+#warn { position: fixed; inset: 0; z-index: 46; display: grid; place-items: center; padding: 24px 16px; box-sizing: border-box; background: #000; transition: opacity 1.1s; cursor: pointer; }
+#warn.out { opacity: 0; pointer-events: none; }
+#warn[hidden] { display: none !important; }
+#warn .index { width: min(460px, 100%); box-sizing: border-box; display: grid; gap: 12px; background: var(--paper); color: var(--pencil); border-radius: 3px; padding: 30px 24px 18px; transform: rotate(-1.4deg); box-shadow: 0 18px 60px rgba(0,0,0,.9), 0 0 120px rgba(255,150,70,.06); background-image: linear-gradient(to bottom, transparent 24px, rgba(190,60,60,.45) 24px, rgba(190,60,60,.45) 25px, transparent 25px), repeating-linear-gradient(to bottom, transparent 0 33px, rgba(70,110,170,.2) 33px 34px); animation: warnIn 1.8s cubic-bezier(.2,.8,.3,1) both; filter: brightness(.92) sepia(.08); }
+#warn .h { margin: 0 0 2px; font-family: var(--print); font-size: 15px; letter-spacing: .2em; text-transform: uppercase; color: #6d2a22; }
+#warn p { margin: 0; font-family: var(--hand); font-size: clamp(19px, 4.9vw, 24px); line-height: 1.32; }
+#warn .go { margin-top: 6px; font-family: var(--fell); font-style: italic; font-size: 14px; color: rgba(58,55,50,.62); text-align: right; animation: fadeUp 1.4s 2.2s both; }
+@keyframes warnIn { 0% { opacity: 0; transform: translateY(10px) rotate(-3deg); filter: brightness(.2) sepia(.08); } 60% { opacity: 1; } 100% { opacity: 1; transform: rotate(-1.4deg); filter: brightness(.92) sepia(.08); } }
+/* pass it on: one index card at a time, the same paper as the names card */
+#share { position: fixed; inset: 0; z-index: 44; background: #000; display: grid; padding: 24px 16px; box-sizing: border-box; top: var(--vvt, 0px); bottom: auto; height: var(--vvh, 100%); overflow-x: hidden; overflow-y: auto; }
+#share .index { margin: auto; }
+#share form, #shareOut { display: grid; gap: 14px; }
+#share .index.in { animation: cardIn .6s cubic-bezier(.2,.8,.3,1) both; }
+#share .rule { margin: 0; font-family: var(--hand); font-size: 19px; line-height: 1.25; color: #8c2a24; }
+#share label, #share #shareReady { font-family: var(--hand); font-size: clamp(23px, 5.6vw, 28px); line-height: 1.18; }
+#share input { width: 100%; box-sizing: border-box; background: transparent; border: 0; border-bottom: 1.5px solid rgba(58,55,50,.45); border-radius: 0; padding: 6px 2px; font-family: var(--hand); font-size: 21px; color: var(--pencil); outline: none; }
+#share input::placeholder { color: rgba(58,55,50,.42); }
+#share .choices { display: grid; gap: 8px; }
+#share .choices button { text-align: left; background: transparent; border: 1.5px solid rgba(58,55,50,.35); border-radius: 6px; padding: 10px 12px; min-height: 44px; font-family: var(--hand); font-size: 21px; color: var(--pencil); cursor: pointer; }
+#share .choices button:hover { border-color: var(--pencil); }
+#share .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 4px; flex-wrap: wrap; }
+#share .row button { font-family: var(--print); letter-spacing: .08em; font-size: 15px; cursor: pointer; border-radius: 999px; min-height: 44px; }
+#share .go { background: #1a120a; color: var(--wax); border: 0; padding: 10px 22px; }
+#share .soft { background: transparent; color: rgba(58,55,50,.75); border: 0; padding: 10px 8px; text-decoration: underline; text-underline-offset: 4px; }
+#share #shareLink { font-family: var(--fell); font-size: 15px; -webkit-user-select: all; user-select: all; }
+#share #sharePay { display: grid; gap: 12px; }
+#share .choices button.buy { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 12px; }
+#share .buy .amt { font-family: var(--print); font-size: 17px; letter-spacing: .04em; }
+#share .buy .pnote { grid-column: 1 / -1; font-size: 16px; line-height: 1.2; color: rgba(58,55,50,.72); }
+#share .pencil { margin: 0; font-family: var(--hand); font-size: 19px; line-height: 1.25; color: #5a554c; }
+#share #shareHaveCode { justify-self: start; font-family: var(--print); letter-spacing: .08em; font-size: 15px; cursor: pointer; min-height: 44px; }
+#share #shareCode { font-family: var(--print); letter-spacing: .12em; text-transform: uppercase; }
+#passOn { background: transparent; border: 0; color: var(--wax); font-family: var(--hand); font-size: 22px; padding: 8px 14px; min-height: 44px; cursor: pointer; text-decoration: underline; text-decoration-color: rgba(233,220,184,.3); text-underline-offset: 6px; }
+#passOn:hover { text-decoration-color: var(--wax); }
+#intro .note { margin: 0; color: var(--ash); font-size: 13px; letter-spacing: .14em; text-transform: uppercase; font-family: var(--print); }
+
+/* ---------- the super flash ---------- */
+body::before, body::after { content: ''; position: fixed; left: 0; right: 0; height: 0; background: #000; z-index: 28; transition: height .18s cubic-bezier(.2,.9,.3,1); pointer-events: none; }
+body::before { top: 0; }
+body::after { bottom: 0; }
+body.letterbox::before, body.letterbox::after { height: 13vh; }
+.hud-left { display: flex; gap: 8px; align-items: center; }
+.hud-right { display: flex; gap: 8px; align-items: center; }
+#fsBtn { display: grid; place-items: center; padding: 7px 10px; }
+#fsBtn .fs-close { display: none; }
+#fsBtn.on .fs-open { display: none; }
+#fsBtn.on .fs-close { display: inline; }
+#pewBtn { color: var(--gold) !important; border-color: rgba(242,196,106,.55) !important; }
+body.in-pew #pewBtn { visibility: hidden; }
+/* blackout, grip, lunge: the room goes dark and the note and pills go with it (still tappable) */
+body.blackout #dock, body.blackout #hud:not(.dim) { opacity: .06; transition: opacity .25s; }
+/* the possession: the box all but goes, but it still takes a tap, and what is sent then waits for the table */
+body.cine #dock { opacity: .06; transition: opacity .4s; }
+body.cine #dock:focus-within { opacity: .55; }
+#establish { position: fixed; inset: 0; z-index: 41; background: #000; overflow: hidden; }
+#establish img, #establish video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+#establish video { display: none; }
+/* held eight seconds, pushed in slowly (1.00 to 1.12, a 2% rise), ease in and out: the walk up the drive. Its own film, when it
+   lands, plays instead (it starts on this still, so nothing jumps) and the push-in stands down. */
+#establish.in { animation: estIn .9s ease-out; }   /* up out of the title: no fill, so the fade-out below still wins */
+#establish.in img { animation: estab 8s cubic-bezier(.45,0,.55,1) both; }
+#establish.clip img { animation: none; }
+#establish.clip video { display: block; }
+#establish.out { opacity: 0; transition: opacity 1s; }
+@keyframes estIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes estab { from { transform: scale(1) translateY(0); opacity: 0; } 8% { opacity: 1; } to { transform: scale(1.12) translateY(-2%); opacity: 1; } }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ---------- toast ---------- */
+#toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 200px); transform: translateX(-50%); z-index: 20; background: rgba(7,6,8,.8); border: 1px solid rgba(242,196,106,.4); color: #f3e2b8; font-family: var(--print); letter-spacing: .12em; padding: 10px 18px; border-radius: 999px; white-space: nowrap; max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis; }
+#toast.in { animation: fadeUp .5s both; }
+
+/* ---------- The Pew (Pierce's SOLACE room, ported from his pew.html; everything scoped under #pew) ---------- */
+body.in-pew #hud { z-index: 50; opacity: 1; }
+#pew, #pew * { box-sizing: border-box; margin: 0; padding: 0; }
+#pew button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+#pew {
+  position: fixed; inset: 0; z-index: 45;
+  overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  background: #0c0a09; color: #faf8f5; font-family: "Outfit", sans-serif; font-size: 16px; line-height: normal;
+  touch-action: manipulation;
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="%23D4AF37" d="M11 2h2v7h7v2h-7v11h-2v-11h-7v-2h7z"/><circle cx="12" cy="10" r="3" fill="none" stroke="%23D4AF37" stroke-width="0.5" opacity="0.5"/></svg>') 12 12, auto;
+}
+#pew :focus-visible { outline: 2px solid #D4AF37; outline-offset: 3px; }
+#pew .agp-back {
+  position: fixed; z-index: 10;
+  top: calc(env(safe-area-inset-top, 0px) + 12px); left: calc(env(safe-area-inset-left, 0px) + 16px);
+  background: rgba(12,10,9,.55); border: 1px solid rgba(255,255,255,.2); color: #faf8f5;
+  padding: .6rem 1.1rem; font-family: "Outfit", sans-serif; font-size: .7rem; letter-spacing: .2em; text-transform: uppercase; cursor: pointer;
+}
+#pew.agp-in-room .agp-back { background: rgba(255,255,255,.88); border-color: #ddd; color: #888; }
+#pew .agp-cover {
+  position: relative; z-index: 2; min-height: 100vh; min-height: 100dvh;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 4.5rem) max(1.25rem, env(safe-area-inset-right, 0px)) max(2rem, env(safe-area-inset-bottom, 0px)) max(1.25rem, env(safe-area-inset-left, 0px));
+}
+#pew .agp-pew-hero { position: relative; z-index: 2; width: min(650px, 90vw); margin-bottom: 2rem; animation: agp-pew-float 6s ease-in-out infinite; }
+#pew .agp-pew-hero .agp-pew-img { width: 100%; height: auto; filter: drop-shadow(0 24px 48px rgba(0,0,0,0.6)); }
+#pew .agp-pew-hero .agp-jesus-overlay { position: absolute; inset: 0; opacity: 0; transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1); display: flex; align-items: center; justify-content: center; pointer-events: none; }
+#pew .agp-pew-hero .agp-jesus-overlay img { width: 95%; height: auto; transform: translateY(-10%); }
+#pew .agp-pew-hero.show-jesus .agp-jesus-overlay { opacity: 1; }
+@keyframes agp-pew-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+#pew .agp-title-wrap { text-align: center; margin-bottom: 2.5rem; }
+#pew .agp-title-wrap h2 { font-family: "Cormorant Garamond", Georgia, serif; font-size: clamp(2.5rem, 10vw, 4.5rem); font-weight: 600; letter-spacing: 0.05em; }
+#pew .agp-btn-enter { padding: 1.1rem 3.5rem; font-family: system-ui, -apple-system, sans-serif; font-size: 0.9rem; letter-spacing: 0.3em; text-transform: uppercase; color: #faf8f5; background: transparent; border: 1px solid rgba(255,255,255,0.2); cursor: pointer; transition: 0.4s; max-width: 100%; }
+#pew .agp-btn-enter:hover { background: rgba(255,255,255,0.05); border-color: #fff; transform: scale(1.05); }
+#pew .agp-rainbow-experience {
+  position: fixed; inset: 0; z-index: 3; display: none; flex-direction: column; align-items: center;
+  background: #ffffff; overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  padding: calc(env(safe-area-inset-top, 0px) + 5rem) max(1rem, env(safe-area-inset-right, 0px)) max(4rem, env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
+}
+#pew .agp-rainbow-experience.visible { display: flex; }
+#pew .agp-gallery-title { color: #1a1714; font-family: "Cormorant Garamond", Georgia, serif; font-style: italic; margin-bottom: 4rem; font-weight: 400; font-size: clamp(1.35rem, 5vw, 2.2rem); text-align: center; max-width: 36rem; padding: 0 0.5rem; }
+#pew .agp-gallery-title.agp-grace { color: #D4AF37; }
+#pew .agp-gallery-title:focus { outline: none; }
+#pew .agp-pew-grid { display: flex; flex-direction: column; gap: 4rem; width: 100%; max-width: 1400px; }
+#pew .agp-pew-row { display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; }
+@media (min-width: 700px) {
+  #pew .agp-pew-grid { gap: 6rem; }
+  #pew .agp-pew-row { gap: 4rem; }
+}
+#pew .agp-pew-card { width: clamp(280px, 85vw, 380px); max-width: 100%; display: flex; flex-direction: column; align-items: center; cursor: pointer; background: none; border: 0; color: inherit; font: inherit; transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1); -webkit-tap-highlight-color: transparent; }
+#pew .agp-img-container { position: relative; width: 100%; mix-blend-mode: multiply; }
+#pew .agp-img-container .agp-pew-base { width: 100%; height: auto; }
+#pew .agp-jesus-overlay-img { position: absolute; top: 0; left: 0; width: 100%; height: auto; opacity: 0; transition: opacity 0.8s ease; pointer-events: none; }
+@media (hover: hover) {
+  #pew .agp-pew-card:hover .agp-jesus-overlay-img { opacity: 1; }
+  #pew .agp-pew-card:hover { transform: translateY(-20px) scale(1.02); }
+}
+#pew .agp-pew-card.agp-touched .agp-jesus-overlay-img { opacity: 1; }
+#pew .agp-symphony-active .agp-jesus-overlay-img { opacity: 1 !important; }
+#pew .agp-symphony-playing .agp-pew-card { animation: agp-divine-pulse 4s ease-in-out infinite alternate; }
+@keyframes agp-divine-pulse {
+  from { transform: scale(1.02); filter: brightness(1); }
+  to { transform: scale(1.06); filter: brightness(1.1) drop-shadow(0 0 25px rgba(212, 175, 55, 0.35)); }
+}
+#pew .agp-mood-label { margin-top: 1.5rem; font-family: "Cormorant Garamond", Georgia, serif; font-style: italic; color: #999; font-size: 1.1rem; text-align: center; }
+#pew .agp-revelation-modal { position: fixed; inset: 0; z-index: 1000; background: #000; display: none; align-items: center; justify-content: center; opacity: 0; transition: opacity 1.5s ease; }
+#pew .agp-revelation-modal.visible { display: flex !important; flex-direction: column; justify-content: center; align-items: center; opacity: 1; }
+#pew .agp-video-container { position: absolute; inset: 0; background: #000; }
+#pew .agp-video-container video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center center; }
+#pew .agp-verse-overlay { position: relative; z-index: 20; max-width: 700px; padding: max(1.5rem, env(safe-area-inset-top, 0px)) 1.5rem 1.5rem; text-align: center; background: radial-gradient(circle, rgba(0,0,0,0.8) 0%, transparent 80%); opacity: 0; pointer-events: none; transition: opacity 2s ease; }
+#pew .agp-verse-overlay.show { opacity: 1; pointer-events: auto; }
+#pew .agp-verse-text { font-family: "Cormorant Garamond", Georgia, serif; font-size: clamp(1.35rem, 5vw, 2.2rem); font-style: italic; margin-bottom: 2rem; }
+#pew .agp-verse-ref { text-transform: uppercase; letter-spacing: 0.3em; font-size: 0.8rem; opacity: 0.6; }
+#pew .agp-btn-skip {
+  position: absolute; z-index: 50;
+  bottom: max(2rem, env(safe-area-inset-bottom, 0px)); right: max(1rem, env(safe-area-inset-right, 0px));
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: white;
+  padding: 0.6rem 1.2rem; font-family: "Outfit", sans-serif; text-transform: uppercase; letter-spacing: 0.2em; font-size: 0.7rem;
+  cursor: pointer; opacity: 0; pointer-events: none; transition: all 0.5s;
+}
+#pew .agp-btn-skip.visible { opacity: 1; pointer-events: auto; }
+#pew .agp-controls-footer { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; margin-top: 4rem; margin-bottom: 4rem; }
+#pew .agp-btn-symphony {
+  display: none; padding: 1.2rem 2rem; max-width: 90vw; background: #D4AF37; color: white; border: none;
+  font-family: "Outfit", sans-serif; text-transform: uppercase; letter-spacing: 0.25em; font-size: 0.85rem;
+  cursor: pointer; transition: 0.5s; box-shadow: 0 10px 30px rgba(212, 175, 55, 0.2);
+}
+#pew .agp-btn-symphony:hover { background: #b8952d; transform: translateY(-3px); }
+#pew .agp-btn-symphony.playing { background: #1a1714; }
+#pew .agp-btn-exit-rev { background: none; border: 1px solid rgba(255,255,255,0.3); color: white; padding: 0.8rem 2rem; font-family: system-ui, -apple-system, sans-serif; text-transform: uppercase; letter-spacing: 0.2em; font-size: 0.8rem; cursor: pointer; margin-top: 3rem; }
+#pew .agp-stars-layer { position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+#pew .agp-star { position: absolute; top: 0; left: 0; background: rgba(255, 248, 230, 0.9); border-radius: 50%; }
+#pew .agp-transition-overlay { position: fixed; inset: 0; background: #0c0a09; z-index: 2000; pointer-events: none; opacity: 0; transition: opacity 0.8s; }
+#pew .agp-transition-overlay.active { opacity: 1; }
+#toast[role="button"] { cursor: pointer; }
+
+/* ---------- phones: nothing scrolls, zooms, bounces or selects; the keyboard never hides the board ---------- */
+html, body { overscroll-behavior: none; }
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
+input { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+#dock { bottom: var(--kb, 0px); }
+#q, #askform button { min-height: 44px; box-sizing: border-box; }
+body.kb #note, body.kb #qwait { display: none; }
+/* upright with the keyboard up: the box stands at the bottom of what the keyboard leaves visible (the visual viewport: --vvt is its
+   top, --vvh its height, --dockh the box's own height, measured by game.js), and the camera sets the board right on it */
+body.kb[data-scene="port"] #dock { top: calc(var(--vvt, 0px) + var(--vvh, 100%) - var(--dockh, 52px)); bottom: auto; padding: 0 16px 8px; gap: 0; background: none; transform: none; transition: none; }
+/* centred while it fits; when it doesn't (a phone on its side, keyboard up) it scrolls instead of losing its buttons */
+body.kb #hud { visibility: hidden; }
+/* upright: the transcript sits just under the board, the note and the question below it */
+body[data-scene="port"] #transcript { top: var(--trtop, 52vh); }
+body[data-scene="port"] #tq { font-size: 18px; line-height: 1.25; max-height: 2.5em; overflow: hidden; }
+body[data-scene="port"] #ta { font-size: 19px; letter-spacing: .24em; }
+body[data-scene="port"] #ta.hint, body.short #ta.hint { font-size: 16px; letter-spacing: .02em; }
+body.kb[data-scene="port"] #transcript { visibility: hidden; }
+body[data-scene="port"] #dock { gap: 4px; padding-top: 4px; }
+/* on its side: the board takes the height, the note and the question stand in a column on the right, the transcript sits between the pills */
+body.short #dock { grid-template-columns: minmax(0, 1fr); justify-items: stretch; left: auto; right: 0; top: max(calc(env(safe-area-inset-top, 0px) + 50px), var(--trbot, 0px), var(--rcand, 0px)); width: 200px; box-sizing: border-box; align-content: end; grid-template-rows: minmax(0, 1fr) auto; padding: 0 calc(env(safe-area-inset-right, 0px) + 10px) calc(env(safe-area-inset-bottom, 0px) + 8px) 8px; background: none; }
+/* the column's backdrop fades in from its top too, so it never draws a straight edge across the photo */
+body.short #dock::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(to left, rgba(7,6,8,.85), rgba(7,6,8,.5) 70%, rgba(7,6,8,0)); -webkit-mask-image: linear-gradient(to bottom, transparent, #000 90px); mask-image: linear-gradient(to bottom, transparent, #000 90px); }
+body.short.kb #dock::before { display: none; }
+body.short #note { align-self: end; font-size: 19px; padding: 6px 4px; }
+body.short #askform { width: 100%; }
+body.short #q { padding: 8px 12px; }
+body.short #askform button { padding: 8px 12px; }
+body.short #transcript { top: calc(env(safe-area-inset-top, 0px) + 8px); left: var(--trl, 240px); right: var(--trr, 140px); }
+body.short #tq { font-size: 14px; min-height: 1.1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.short #ta { font-size: 19px; letter-spacing: .22em; min-height: 1.1em; min-width: 0; }
+body.short.kb #dock { grid-template-rows: auto; align-content: end; top: auto; background: none; width: min(460px, 56%); }
+body.short.kb #transcript { visibility: hidden; }
+@media (max-height: 520px) {
+  /* pass it on, on its side with the keyboard up: the question stays in view over the box, Next beside the box */
+  body.kb #share { padding: 4px 12px; }
+  body.kb #share .index { margin: 0 auto auto; padding: 8px 14px; gap: 4px 10px; transform: none; animation: none; }
+  body.kb #share #shareRule, body.kb #share .index > .row:last-child { display: none; }
+  body.kb #share form { grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 4px 10px; }
+  body.kb #share label { grid-column: 1 / -1; font-size: 17px; line-height: 1.15; }
+  body.kb #share .choices { grid-column: 1 / -1; }
+  body.kb #share input { font-size: 18px; padding: 4px 2px; }
+  body.kb #share form .row { margin-top: 0; flex-wrap: nowrap; gap: 6px; }
+  body.kb #share .row button { min-height: 36px; padding: 6px 14px; }
+  body.kb #share .soft { padding: 6px 4px; }
+}
+body.short #toast { bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); left: 40%; }
+
+@media (max-width: 440px) {
+  #hud { gap: 6px; }
+  .hud-left { gap: 6px; }
+  #hud button { padding: 7px 10px; letter-spacing: .03em; font-size: 12px; }
+  #hud .pill { padding: 7px 10px; letter-spacing: .03em; font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #establish.in { animation-duration: .01s; }
+  #establish.in img { animation-duration: .01s; }
+  #pew .agp-pew-hero, #pew .agp-symphony-playing .agp-pew-card { animation: none; }
+  #pew .agp-pew-card:hover, #pew .agp-btn-enter:hover, #pew .agp-btn-symphony:hover { transform: none; }
+}
+/* the questions waiting for the board, in the order sent (game.js enqueue): faint, above the box; a full line nudges the box */
+#qwait { width: min(520px, 100%); display: grid; gap: 1px; justify-items: center; font-family: var(--fell); font-style: italic; font-size: 14px; line-height: 1.3; color: var(--ash); pointer-events: none; }
+#qwait:empty { display: none; }
+#qwait div { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .7; }
+#qwait div:first-child { opacity: .95; }
+#q.full { animation: nudge .3s; }
+@keyframes nudge { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+#tq.waiting{opacity:.55}
+#ta.fading{opacity:0;transition:opacity 1.2s}
+/* a typed line the board will not answer (a joke, or one in five of the rest): faint pencil on the line, gone after eight seconds */
+#tq.pencil { color: rgba(176,168,152,.58); text-shadow: 0 1px 0 rgba(0,0,0,.55); transform: rotate(-.7deg); transition: opacity 1.2s; }
+#tq.pencil.fading { opacity: 0; }
+/* the record changed: their own line, altered, shown in their hand for four seconds, then it fades back to how it was */
+#tq.edited { transition: opacity .9s; }
+#tq.edited.fading { opacity: 0; }
+#share[hidden], #note[hidden], #dare[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="A talking board on a farmhouse table. Drag to move the planchette."></canvas>
+
+<div id="hud">
+  <div class="hud-left"><button id="pewBtn" type="button" hidden>The Pew</button></div>
+  <div class="hud-right"><button id="fsBtn" type="button" hidden aria-label="Full screen" title="Full screen (F)"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path class="fs-open" d="M1 5V1h4M11 1h4v4M15 11v4h-4M5 15H1v-4" fill="none" stroke="currentColor" stroke-width="1.6"/><path class="fs-close" d="M5 1v4H1M15 5h-4V1M11 15v-4h4M1 11h4v4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button></div>
+</div>
+
+<div id="transcript" aria-live="polite">
+  <div id="tq"></div>
+  <div id="ta"></div>
+  <div id="tref" hidden></div>
+</div>
+
+<button id="dare" type="button" hidden></button>
+
+<div id="dock">
+  <button id="note" type="button" hidden>ask it something</button>
+  <div id="qwait" aria-hidden="true"></div>
+  <form id="askform" autocomplete="off">
+    <label for="q" hidden>Ask the board</label>
+    <input id="q" name="q" maxlength="120" placeholder="Ask it something" enterkeyhint="send" autocapitalize="sentences" autocorrect="off" spellcheck="false">
+    <button type="submit">ask</button>
+  </form>
+</div>
+
+<div id="establish" hidden><img id="estImg" alt="" crossorigin="anonymous"><video id="estVid" playsinline preload="auto" aria-hidden="true"></video></div>
+<div id="toast" hidden></div>
+
+<section id="pew" hidden aria-label="The Pew">
+  <div class="agp-transition-overlay" id="agp-transitionOverlay"></div>
+  <div class="agp-stars-layer" id="agp-starsLayer"></div>
+  <button type="button" class="agp-back" id="agp-back">Back to the table</button>
+  <div class="agp-cover" id="agp-cover">
+    <div class="agp-pew-hero" id="agp-heroContainer">
+      <img class="agp-pew-img" data-src="assets/pew/hero-pew.png" alt="">
+      <div class="agp-jesus-overlay"><img data-src="assets/pew/hero-jesus.png" alt=""></div>
+    </div>
+    <div class="agp-title-wrap"><h2><em>The</em> Pew</h2></div>
+    <button type="button" class="agp-btn-enter" id="agp-btnEnter">Enter the Quiet</button>
+  </div>
+  <div class="agp-rainbow-experience" id="agp-rainbowExperience" aria-hidden="true">
+    <h3 class="agp-gallery-title" id="agp-galleryTitle" tabindex="-1">What is your heart carrying today?</h3>
+    <div class="agp-pew-grid" id="agp-pewGrid">
+      <div class="agp-pew-row" id="agp-pewRowTop"></div>
+      <div class="agp-pew-row" id="agp-pewRowBottom"></div>
+    </div>
+    <div class="agp-controls-footer">
+      <button type="button" class="agp-btn-symphony" id="agp-btnPlaySymphony">Enter the Symphony</button>
+    </div>
+  </div>
+  <div class="agp-revelation-modal" id="agp-revelationModal" role="dialog" aria-modal="true" aria-hidden="true">
+    <button type="button" class="agp-btn-skip" id="agp-btnSkipVideo">Skip (S)</button>
+    <div class="agp-video-container"><video id="agp-mainVideo" playsinline preload="none"></video></div>
+    <div class="agp-verse-overlay" id="agp-verseOverlay" aria-live="polite">
+      <div class="agp-verse-text" id="agp-verseText"></div>
+      <div class="agp-verse-ref" id="agp-verseRef"></div>
+      <button type="button" class="agp-btn-exit-rev" id="agp-btnExitRevelation">Carry this Peace</button>
+    </div>
+  </div>
+</section>
+
+<div id="share" hidden>
+  <div class="index" id="shareCard">
+    <p class="rule" id="shareRule">This is for someone who'll laugh about it after. If they won't, don't send it.</p>
+    <form id="shareForm" autocomplete="off">
+      <label for="shareIn" id="shareLabel">Who's it for? First name.</label>
+      <input id="shareIn" maxlength="60" autocapitalize="sentences" autocorrect="off" spellcheck="false" enterkeyhint="next">
+      <div class="choices" id="shareChoices" hidden></div>
+      <div class="row"><button type="button" class="soft" id="shareSkip">Skip</button><button type="submit" class="go" id="shareNext">Next</button></div>
+    </form>
+    <div id="shareOut" hidden>
+      <p id="shareReady">Ready.</p>
+      <input id="shareLink" readonly aria-label="The link">
+      <div class="row"><button type="button" class="go" id="shareCopy">Copy the link</button><button type="button" class="go" id="shareSend" hidden>Send it</button></div>
+      <p class="pencil" id="shareLeft" hidden></p>
+      <div id="sharePay" hidden>
+        <div class="choices" id="sharePrices"></div>
+        <p class="pencil" id="sharePayNote" hidden></p>
+        <button type="button" class="soft" id="shareHaveCode">I have a code</button>
+        <form id="shareCodeForm" autocomplete="off" hidden>
+          <input id="shareCode" maxlength="20" placeholder="BYE-" aria-label="Your code" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go">
+          <div class="row"><button type="submit" class="go">Use it</button></div>
+        </form>
+      </div>
+    </div>
+    <div class="row"><button type="button" class="soft" id="shareClose">Close</button></div>
+  </div>
+</div>
+
+<div id="warn" role="dialog" aria-modal="true" aria-labelledby="warnH" hidden>
+  <div class="index">
+    <p id="warnH" class="h">Before you sit down</p>
+    <p>Nothing at this table is written ahead of time. What answers is live, and it answers only you.</p>
+    <p>Wear headphones. Turn the lights off.</p>
+    <p>To stop at any time, press and hold a candle. And always say goodbye.</p>
+    <p>If you are in a hard place right now, let this wait for another night.</p>
+    <p class="go">touch the card to go on</p>
+  </div>
+</div>
+
+<div id="intro">
+  <h1>GOOD<span><video id="matchOut" muted playsinline preload="auto" aria-hidden="true"></video></span>BYE</h1>
+  <p id="passed" hidden></p>
+  <p id="wayOut" class="sub">To stop at any time, press and hold a candle for a second.</p>
+  <p id="still" hidden>It's still here.</p>
+  <p id="help" hidden>If you are thinking about hurting yourself, please talk to someone now. In the US, call or text 988. Anywhere else, call your local emergency number.</p>
+  <p id="helpHome" hidden>If someone is hurting you, or you are not safe, tell someone you trust right now. In the US, you can call or text 988 any time, or call the Childhelp hotline at 1-800-422-4453. If you are in danger, call 911, or your local emergency number.</p>
+  <button id="strike" type="button" disabled>Lighting the candles…</button>
+  <button id="passOn" type="button" hidden>Pass it on</button>
+  <p class="note" id="headphones">WEAR HEADPHONES</p>
+  <button id="fsIntro" type="button" hidden>Full screen</button>
+</div>
+
+<script src="audio.js?v=fc80f22337"></script>
+<script src="places.js?v=15464ddff7"></script>
+<script src="game.js?v=3e4b0de490"></script>
+<script src="fullscreen.js?v=858b760e85"></script>
+</body>
+</html>

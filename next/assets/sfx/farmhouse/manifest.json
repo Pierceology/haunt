@@ -1,0 +1,162 @@
+{
+  "_note": "Recorded foley for the Farmhouse, played in place of the synthesized takes. One file is one whole sound. steps: a walk across a ceiling, heard from the room below (about six seconds). knock: one knuckle on a wooden table, heard from under it. creak: a floorboard or a hinge. floor: boards taking weight under a table. house: one long groan of old timber. latch: an iron cellar latch lifting and dropping. breath: one slow breath close to a microphone. Name the files here, 2 to 4 of each; plain file names only. scratch: nails dragged slowly along the underside of a wooden table, three or four strokes. knocks, light, near, stairs, door, shut, chair, thud, nails, drag, gasp, rattle, glass, chime are the demon's sounds (game.js playSfx; audio.js A.rec places each one); match is the struck match on the title, snuff a candle going out, slam the planchette landing hard.",
+  "steps": [
+    "steps-overhead-heavy-1.mp3",
+    "steps-overhead-heavy-2.mp3",
+    "pacing-upstairs-2.mp3",
+    "steps-overhead-stop-1.mp3",
+    "steps-overhead-stop-2.mp3"
+  ],
+  "knock": [
+    "knock-under-hard-1.mp3",
+    "knock-under-hard-2.mp3"
+  ],
+  "creak": [
+    "floorboard-creak-single-1.mp3",
+    "floorboard-creak-single-2.mp3",
+    "door-creak-open-1.mp3",
+    "door-creak-open-2.mp3"
+  ],
+  "floor": [
+    "floor-takes-weight-1.mp3",
+    "floor-takes-weight-2.mp3",
+    "table-creak-weight-1.mp3",
+    "table-creak-weight-2.mp3"
+  ],
+  "house": [
+    "house-settling-groan-1.mp3",
+    "house-settling-groan-2.mp3"
+  ],
+  "latch": [
+    "cellar-latch-1.mp3",
+    "cellar-latch-2.mp3"
+  ],
+  "breath": [
+    "breath-slow-behind-1.mp3",
+    "breath-slow-behind-2.mp3",
+    "breath-exhale-long-1.mp3",
+    "breath-wet-under-table-1.mp3",
+    "breath-voice-1.mp3",
+    "breath-voice-2.mp3"
+  ],
+  "scratch": [
+    "scratch-nails-strokes-1.mp3",
+    "scratch-nails-strokes-2.mp3"
+  ],
+  "knocks": [
+    "knock-under-three-slow-1.mp3",
+    "knock-under-three-slow-2.mp3"
+  ],
+  "light": [
+    "steps-overhead-light-1.mp3",
+    "steps-overhead-light-2.mp3"
+  ],
+  "near": [
+    "footsteps-bare-near-1.mp3",
+    "footsteps-bare-near-2.mp3"
+  ],
+  "stairs": [
+    "stairs-creak-slow-1.mp3",
+    "stairs-creak-slow-2.mp3"
+  ],
+  "door": [
+    "door-creak-open-1.mp3",
+    "door-creak-open-2.mp3"
+  ],
+  "shut": [
+    "door-close-distant-1.mp3",
+    "door-close-distant-2.mp3"
+  ],
+  "chair": [
+    "chair-drag-plank-1.mp3",
+    "chair-drag-plank-2.mp3"
+  ],
+  "thud": [
+    "floor-thud-overhead-1.mp3",
+    "floor-thud-overhead-2.mp3"
+  ],
+  "nails": [
+    "nails-tapping-wood-1.mp3",
+    "nails-tapping-wood-2.mp3"
+  ],
+  "drag": [
+    "cellar-drag-heavy-1.mp3",
+    "cellar-drag-heavy-2.mp3"
+  ],
+  "gasp": [
+    "breath-intake-sharp-1.mp3",
+    "breath-intake-sharp-2.mp3",
+    "inhale-close-1.mp3",
+    "inhale-close-2.mp3"
+  ],
+  "rattle": [
+    "cellar-door-rattle-1.mp3",
+    "cellar-door-rattle-2.mp3"
+  ],
+  "glass": [
+    "glass-tap-window-1.mp3",
+    "glass-tap-window-2.mp3"
+  ],
+  "chime": [
+    "mantel-chime-far-1.mp3",
+    "mantel-chime-far-2.mp3"
+  ],
+  "match": [
+    "match-strike-flare-1.mp3",
+    "match-strike-flare-2.mp3"
+  ],
+  "snuff": [
+    "candle-snuff-puff-1.mp3",
+    "candle-snuff-puff-2.mp3"
+  ],
+  "slam": [
+    "planchette-slam-1.mp3",
+    "planchette-slam-2.mp3"
+  ],
+  "whisper": [
+    "whisper-ear-1.mp3",
+    "whisper-ear-2.mp3"
+  ],
+  "voices": [
+    "voices-below-1.mp3",
+    "voices-below-2.mp3"
+  ],
+  "shh": [
+    "shh-ear-1.mp3",
+    "shh-ear-2.mp3"
+  ],
+  "hum": [
+    "hum-behind-1.mp3",
+    "hum-behind-2.mp3"
+  ],
+  "click": [
+    "click-ear-1.mp3",
+    "click-ear-2.mp3"
+  ],
+  "tap": [
+    "tap-glass-1.mp3",
+    "tap-glass-2.mp3"
+  ],
+  "walls": [
+    "walls-murmur-1.mp3",
+    "walls-murmur-2.mp3"
+  ],
+  "ponder": [
+    "ponder-hum-1.mp3",
+    "ponder-hum-2.mp3",
+    "guttural-breath-1.mp3",
+    "guttural-breath-2.mp3",
+    "throat-click-1.mp3",
+    "throat-click-2.mp3",
+    "teeth-breath-1.mp3",
+    "teeth-breath-2.mp3",
+    "chest-rattle-1.mp3",
+    "chest-rattle-2.mp3",
+    "low-exhale-1.mp3",
+    "low-exhale-2.mp3",
+    "jaw-creak-1.mp3",
+    "jaw-creak-2.mp3",
+    "walls-shift-1.mp3",
+    "walls-shift-2.mp3"
+  ]
+}
