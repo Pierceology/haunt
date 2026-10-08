@@ -12,6 +12,8 @@
 // The synthesized takes are the fallback; if they do not read as real on headphones, the next step is recorded foley (A.samples).
 (function () {
   'use strict';
+  // The desktop-only page (index.html, the gate): a phone, or a window too narrow, gets a page and not the game, so nothing here starts.
+  if (window.GOODBYE_GATE && window.GOODBYE_GATE.on) return;
   const A = { ready: false };
   // Test copies (?debug or ?quiet) stay silent, including any video or audio
   // element, so a game left running in a background browser never makes noise.
@@ -305,7 +307,7 @@
   //           going on, and it comes back slowly, thinner. game.js calls it as the heat crosses 0.35 and 0.7.
   // The two outdoor loops that are mostly codec hiss once they are turned up (night-kansas-ambience, wind-dry-grass) are not used. The whole
   // bed stays well under the planchette and the demon's sounds: at its hottest it is a few dB over the early night's.
-  const BED = { h: 0, thin: 0, hushUntil: 0, hushes: 0, inside: true, buf: {}, sidingG: null, lowG: null, nextSettle: 0, lastRoom: -99, settles: 0, lastCall: -99, loading: '' };
+  const BED = { h: 0, thin: 0, hushUntil: 0, hushes: 0, noCrickets: false, inside: true, buf: {}, sidingG: null, lowG: null, nextSettle: 0, lastRoom: -99, settles: 0, lastCall: -99, loading: '' };
   const smB = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
   const BED_FILES = { siding: ['wind-siding-shutter-1.mp3'], low: ['room-tone-kitchen-1.mp3'], groan: ['house-settling-groan-1.mp3', 'house-settling-groan-2.mp3'],
     creak: ['floorboard-creak-single-1.mp3', 'floorboard-creak-single-2.mp3'], tick: ['wood-ticking-cold-1.mp3', 'wood-ticking-cold-2.mp3'] };
@@ -315,7 +317,7 @@
     return {
       wind: out * Math.min(0.9, (0.2 + 0.09 * smB(0.05, 0.95, h)) * windK),   // (0.2: the room's wind as it always was, early)
       swell: out * (0.06 + 0.06 * h),
-      crickets: pa.crickets === false ? 0 : out * 0.3 * (1 - 0.8 * smB(0.06, 0.85, h)) * Math.pow(0.72, BED.hushes),
+      crickets: pa.crickets === false || BED.noCrickets ? 0 : out * 0.3 * (1 - 0.8 * smB(0.06, 0.85, h)) * Math.pow(0.72, BED.hushes),
       siding: out * inn * 0.3 * smB(0.1, 0.9, h),
       low: inn * 0.2 * smB(0.15, 1, h),
       clock: pa.clock === false ? 0 : 0.5 + 0.34 * h,
@@ -381,7 +383,7 @@
     if (!A.ready) return;
     const v = Math.max(0, Math.min(1, +h || 0)), was = BED.h;
     BED.h = v; BED.lastCall = now();
-    if (v < was - 0.05) { BED.hushes = 0; BED.hushUntil = 0; BED.nextSettle = 0; }   // a new night
+    if (v < was - 0.05) { BED.hushes = 0; BED.hushUntil = 0; BED.nextSettle = 0; BED.noCrickets = false; }   // a new night
     applyBed(4);
   };
   // Everything outside stops dead: the crickets all at once, the wind within half a second; the clock and the house go on. sec later it comes
@@ -539,6 +541,13 @@
   // the first time it is needed) and played through the room's panner. If there are recordings (assets/sfx/<place>/, named in its
   // manifest.json: A.samples) one of those is played instead; these are the fallback.
   const TAKES = {}, SAMPLES = {};
+  // Recorded takes that are decoded and counted but never played: the closed-mouth hums (Pierce, 2026-10-08, "one sound ... ooh, oh, oh,
+  // oh ... so laughable. You've got to remove that."). Measured (tools/house/voiced.py): hum-behind-1 and -2 are
+  // 100% voiced at about 110 Hz with every bit of their energy under 500 Hz, ponder-hum-2 is 91% voiced at 85 Hz; the pondering plays one of
+  // the pool every two or three seconds the whole time the demon is deciding, which is "oh, oh, oh, oh". Turn VOICED_OFF back to an empty
+  // pattern (/^$/) to hear them again. The files stay where they are.
+  const VOICED_OFF = /^(?:ponder-hum|hum-behind)-\d+\.mp3$/, OFF = new WeakSet();
+  const usable = (kind) => { const l = SAMPLES[kind]; return l && l.some((b) => OFF.has(b)) ? l.filter((b) => !OFF.has(b)) : l; };
   const rn = () => Math.random() * 2 - 1;
   function render(sec, fn) {
     const sr = ctx.sampleRate, b = ctx.createBuffer(1, Math.max(1, Math.floor(sec * sr)), sr), d = b.getChannelData(0);
@@ -574,7 +583,7 @@
   A.recorded = 0;   // how many times a recorded take was played in place of a synthesized one (a test's look)
   const ALIAS = { 'knock-under': 'knock', 'creak-low': 'creak' };   // a recorded knock does for a knock under the table too
   const take = (kind, make) => {
-    const rec = SAMPLES[kind] && SAMPLES[kind].length ? SAMPLES[kind] : SAMPLES[ALIAS[kind]];
+    const rec = usable(kind) && usable(kind).length ? usable(kind) : usable(ALIAS[kind]);
     if (rec && rec.length) { A.recorded++; return rec[Math.floor(Math.random() * rec.length)]; }
     const l = TAKES[kind] || (TAKES[kind] = []);
     if (l.length < 3) l.push(make());
@@ -687,6 +696,7 @@
               let ab = RAW[dir + f];
               if (ab) delete RAW[dir + f]; else { const rr = await fetch(dir + f); if (!rr.ok) continue; ab = await rr.arrayBuffer(); }
               const b = await A.decode(ab); if (!b) continue;
+              if (VOICED_OFF.test(f)) OFF.add(b);
               (SAMPLES[k] = SAMPLES[k] || []).push(b); n++;
             } catch (e) { /* that one take is skipped */ }
           }
@@ -715,13 +725,30 @@
   // wet (how much of the room's tail) and cut (a lowpass, for a sound inside a wall): it is then heard through spot() (HRTF, true
   // distance, the first reflections). Every recorded sound of the demon's own goes through here: the one behind them (A.behind), at an
   // ear (A.ear), on the glass in their hand (A.glass), inside the wall (A.wall), the pondering (A.ponder).
+  // A.lastTake: the take that was just played (kind, how long it plays, and when its hits land, in seconds from its start), read straight
+  // after the call by whoever wants the picture to move with the sound (game.js shake). Hits: where the take's envelope rises through a
+  // quarter of its loudest, a quarter second apart at the least, eight at most; worked out once per take.
+  A.lastTake = null;
+  const HITS = new WeakMap();
+  function hitsOf(buf) {
+    if (HITS.has(buf)) return HITS.get(buf);
+    const d = buf.getChannelData(0), w = Math.max(1, Math.round(buf.sampleRate * 0.005)), env = [];
+    let pk = 0;
+    for (let i = 0; i + w <= d.length; i += w) { let e = 0; for (let j = i; j < i + w; j++) e += d[j] * d[j]; const r = Math.sqrt(e / w); env.push(r); if (r > pk) pk = r; }
+    const out = []; let last = -1;
+    for (let i = 1; i < env.length && out.length < 8; i++) if (env[i] > pk * 0.25 && env[i - 1] <= pk * 0.25 && (last < 0 || (i - last) * 0.005 > 0.25)) { out.push(+(i * 0.005).toFixed(3)); last = i; }
+    HITS.set(buf, out);
+    return out;
+  }
   A.rec = function (kind, where, vol) {
     if (!A.ready) return 0;
-    const list = SAMPLES[kind]; if (!list || !list.length) return 0;
+    const list = usable(kind); if (!list || !list.length) return 0;
     if (where && typeof where === 'object') {
       A.recorded++;
       const buf = where.take || list[Math.floor(Math.random() * list.length)];
-      return playAt(buf, spot(where.x, where.y, where.z, { kind, vol: vol == null ? 0.8 : vol, wet: where.wet, cut: where.cut }), 1, where.rate || rnd(0.98, 1.02), where.keep);
+      const len = playAt(buf, spot(where.x, where.y, where.z, { kind, vol: vol == null ? 0.8 : vol, wet: where.wet, cut: where.cut }), 1, where.rate || rnd(0.98, 1.02), where.keep);
+      A.lastTake = { kind, len, hits: hitsOf(buf) };
+      return len;
     }
     const p = where === 'under' ? panner(rnd(-0.3, 0.3), -0.9, -0.7)
       : where === 'above' ? panner(rnd(-2.2, 2.2), 2.6, -0.8)
@@ -729,7 +756,8 @@
       : where === 'left' ? panner(-3, 0.6, rnd(-1.5, 0.5))
       : where === 'right' ? panner(3, 0.6, rnd(-1.5, 0.5))
       : panner(0, -0.2, -0.3);
-    const len = playTake(take(kind), p, now(), vol == null ? 0.8 : vol, rnd(0.97, 1.03));
+    const buf = take(kind), len = playTake(buf, p, now(), vol == null ? 0.8 : vol, rnd(0.97, 1.03));
+    A.lastTake = { kind, len, hits: hitsOf(buf) };
     if (where === 'under') lout(p, 0.45); else out(p, where === 'above' ? 0.45 : 0.3);
     return len;
   };
@@ -826,7 +854,7 @@
   const PONDER = { last: -1, live: [] };
   A.ponder = function (where, vol) {
     if (!A.ready) return 0;
-    const list = SAMPLES.ponder; if (!list || !list.length) return 0;
+    const list = usable('ponder'); if (!list || !list.length) return 0;
     let i = Math.floor(Math.random() * list.length);
     if (list.length > 1 && i === PONDER.last) i = (i + 1 + Math.floor(Math.random() * (list.length - 1))) % list.length;
     PONDER.last = i;
@@ -843,7 +871,10 @@
     for (const h of PONDER.live.splice(0)) { try { h.g.gain.cancelScheduledValues(t); h.g.gain.setTargetAtTime(0, t, 0.05); h.src.stop(t + 0.25); } catch (e) { /* gone */ } }
   };
   // Whether there is a recording of this kind yet (a sound file that has not arrived is a sound that does not play).
-  A.has = (kind) => !!(SAMPLES[kind] && SAMPLES[kind].length);
+  A.has = (kind) => { const l = usable(kind); return !!(l && l.length); };
+  // How late the headphones play what the page asks for, in seconds (the output's own latency where the browser says; Safari does not): the
+  // picture waits this long before it moves with a sound, so a knock is seen when it is heard, not before.
+  A.latency = () => (ctx && typeof ctx.outputLatency === 'number' && ctx.outputLatency > 0 ? Math.min(0.3, ctx.outputLatency) : 0);
 
   // Something knocks inside the walls. z > 0 is behind you; y below zero is under the floor, under the table (the `under` event:
   // A.knock(2, 0, -0.9, -0.8), two hard knocks from right under the phone).
@@ -852,11 +883,14 @@
     const under = y != null && y < 0;
     const p = panner(x ?? rnd(-3, 3), y != null ? y : (z != null ? 0.3 : 1.5), z ?? rnd(-2, 3));
     out(p, 0.6);
-    let t = now();
+    const t0 = now(), hits = [];
+    let t = t0;
     for (let i = 0; i < (n || 2); i++) {
       playTake(take(under ? 'knock-under' : 'knock', () => knuckle(under)), p, t, rnd(0.8, 1), rnd(0.96, 1.04));
+      hits.push(+(t - t0).toFixed(3));
       t += i < (n || 2) - 1 ? rnd(0.24, 0.42) : 0;
     }
+    return hits;   // (where each one lands, in seconds from now: the picture jumps with each)
   };
 
   // The house settling. A long floorboard groan somewhere you can't see.
@@ -867,38 +901,14 @@
     out(p, 0.5);
   };
 
-  // A whisper that moves behind your head. Best on headphones.
-  A.whisper = function (side) {
-    if (!A.ready) return;
-    const t = now(); const d = rnd(1.1, 1.8);
-    const s = noiseSrc(noiseBuf, true);
-    const p = panner(side === 'right' ? 1.2 : -1.2, 0.1, 0.6);
-    const g = ctx.createGain(); g.gain.value = 0;
-    [[650, 6], [1150, 7], [2500, 8], [3400, 9]].forEach(([f, q], i) => {
-      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * rnd(0.9, 1.15); bp.Q.value = q;
-      const fg = ctx.createGain(); fg.gain.value = [0.9, 0.7, 0.45, 0.3][i];
-      s.connect(bp); bp.connect(fg); fg.connect(g);
-    });
-    // syllables
-    let tt = t;
-    while (tt < t + d) {
-      const syl = rnd(0.07, 0.16);
-      g.gain.setValueAtTime(0.0001, tt);
-      g.gain.linearRampToValueAtTime(rnd(0.25, 0.6), tt + syl * 0.3);
-      g.gain.linearRampToValueAtTime(0.0001, tt + syl);
-      tt += syl + rnd(0.01, 0.08);
-    }
-    g.connect(p); out(p, 0.35);
-    // drift around behind you
-    if (p.positionX) {
-      p.positionX.linearRampToValueAtTime(side === 'right' ? -0.6 : 0.6, t + d);
-      p.positionZ.linearRampToValueAtTime(1.2, t + d);
-    }
-    s.start(t, rnd(0, 1)); s.stop(t + d + 0.1);
-  };
+  // The synthesized whisper is gone (Pierce, 2026-10-08: one sound "sounds so laughable. You've got to remove that."). It was noise through four
+  // formant bands (650, 1150, 2500 and 3400 Hz) cut into syllables of 70 to 160 ms: a vowel-like "oh, oh, oh" at one's shoulder, played
+  // whenever the demon asked for a whisper and no recorded take had arrived. A whisper is now the recorded take (A.ear('whisper')) or nothing.
+  // (git 06c55c2 has the old body.) Returns 0 so a caller that asks what it played is told nothing.
+  A.whisper = function () { return 0; };
 
   // Match strike: scratch, flare, settle.
-  A.strike = function () {
+  function matchStrike() {
     if (!A.ready) return;
     const t = now();
     if (SAMPLES.match && SAMPLES.match.length) { const g = ctx.createGain(); playTake(take('match'), g, t, 0.9, 1); out(g, 0.2); return; }   // a recorded strike and flare
@@ -909,7 +919,60 @@
     const f = noiseSrc(brownBuf); const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
     const g2 = ctx.createGain(); env(g2, t + 0.15, 0.08, 0.6, 0.9);
     f.connect(lp); lp.connect(g2); out(g2, 0.3); f.start(t + 0.15, 0, 1.2);
+  }
+  A.matchStrike = matchStrike;
+
+  // ---------- the wall clock strikes the hour (DIRECTION.md 13.6) ----------
+  // A.strike() with nothing is the match (the title's, the walk-up's). A.strike(n) is the wall clock striking n, the clock they have been
+  // hearing since the title: a struck gong of two inharmonic partials, about 330 and 500 Hz, with a short bright highpassed click for the
+  // attack and a 2.5 s decay, each strike 2.0 s after the last, through the same place as the tick (amb.clock: the left wall, the mantle,
+  // through the house, at the bed's own level, so it is never louder than the room it is in and never heard outside, before the door).
+  // o.level: 1, or 0.5 for a strike that plays under a move still running (game.js clock). o.wrong: a fourth strike after the n, the one at
+  // three in the morning: flatter (a half tone down), slower (a soft attack, a longer decay, 2.6 s after the third). Returns { count (strikes
+  // heard), at (each one's attack, in ms from now), last (the last attack), end (when the last has died away) }, or 0 when the room is not up.
+  // A.strikeStop(sec) lets what is left of it go (a held candle, the soft exit: stopLayers calls it).
+  const STRIKE = { live: [], gap: 2.0, wrongGap: 2.6, decay: 2.5, f1: 330, f2: 500 };
+  function gongOne(dest, t, wrong, v) {
+    const k = wrong ? Math.pow(2, -1 / 12) : 1, f1 = STRIKE.f1 * k, f2 = STRIKE.f2 * k, atk = wrong ? 0.03 : 0.004, dec = wrong ? 3.3 : STRIKE.decay;
+    // [Hz, level, seconds the partial takes to die away]: the two named partials carry it; the twin beside the first beats against it a
+    // little (an old bell is never in tune with itself); the faint high one is the metal
+    [[f1, 0.55, dec], [f2, 0.34, dec * 0.72], [f1 * 1.006, 0.2, dec * 0.9], [f1 * 2.41, 0.06, dec * 0.3]].forEach(([f, a, d]) => {
+      const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(0.0002, a * v), t + atk); g.gain.exponentialRampToValueAtTime(0.0001, t + atk + d);
+      o.connect(g); g.connect(dest); o.start(t); o.stop(t + atk + d + 0.1);
+    });
+    // the attack: a short bright tick of the hammer, highpassed, over almost at once
+    const s = noiseSrc(); const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = wrong ? 2600 : 3600;
+    const cg = ctx.createGain(); env(cg, t, 0.001, (wrong ? 0.1 : 0.2) * v, 0.014);
+    s.connect(hp); hp.connect(cg); cg.connect(dest); s.start(t, rnd(0, 1.5), 0.05);
+  }
+  A.strike = function (n, o) {
+    if (n == null) return matchStrike();
+    if (!A.ready || !amb.clock) return 0;
+    o = o || {};
+    const count = Math.max(1, Math.min(12, Math.round(+n) || 1)), lvl = o.level == null ? 1 : Math.max(0, Math.min(1, +o.level));
+    const t0 = now() + 0.04, master = ctx.createGain(); master.gain.value = lvl; master.connect(amb.clock);
+    const at = [];
+    for (let i = 0; i < count; i++) { gongOne(master, t0 + i * STRIKE.gap, false, 0.75); at.push(Math.round((0.04 + i * STRIKE.gap) * 1000)); }
+    if (o.wrong) { gongOne(master, t0 + (count - 1) * STRIKE.gap + STRIKE.wrongGap, true, 0.6); at.push(Math.round((0.04 + (count - 1) * STRIKE.gap + STRIKE.wrongGap) * 1000)); }
+    const last = at[at.length - 1], end = last + Math.round((o.wrong ? 3.4 : STRIKE.decay + 0.2) * 1000);
+    const h = { master, until: t0 + end / 1000 };
+    STRIKE.live = STRIKE.live.filter((x) => x.until > now()); STRIKE.live.push(h);
+    return { count: at.length, at, last, end };
   };
+  A.strikeStop = function (sec) {
+    if (!ctx) return;
+    const t = now(), d = Math.max(0.02, sec || 0.1);
+    for (const h of STRIKE.live.splice(0)) {
+      try {
+        const p = h.master.gain;
+        if (p.cancelAndHoldAtTime) p.cancelAndHoldAtTime(t); else { p.cancelScheduledValues(t); p.setValueAtTime(Math.max(0.0001, p.value), t); }
+        p.linearRampToValueAtTime(0.0001, t + d);
+      } catch (e) { /* gone */ }
+    }
+  };
+  // Midnight takes the crickets for the rest of the night (a new night puts them back: A.heat, A.noCrickets(false)).
+  A.noCrickets = function (on) { BED.noCrickets = !!on; applyBed(0.4); };
 
   // Ember crackle while letters scorch.
   A.crackle = function (dur) {
@@ -966,7 +1029,7 @@
   // own bed is all there is, and it is heard again at once). Neither lives on the layer bus, so they are taken here by name.
   A.stopLayers = function () {
     if (!A.ready) return;
-    thrumStop(0.08); silenceEnd(0.3);
+    thrumStop(0.08); silenceEnd(0.3); A.strikeStop(0.06);
     if (!layer) return;
     const L = layer; layer = null; dropLayer(L, 0.08);
   };
@@ -1153,13 +1216,15 @@
   // little nearer and a little louder than the one before. n boards (six by default), about a second apart.
   A.floorLoad = function (n) {
     if (!A.ready) return;
-    const t0 = now(), count = Math.max(2, n || 6);
+    const t0 = now(), count = Math.max(2, n || 6), hits = [];
     for (let i = 0; i < count; i++) {
       const k = i / (count - 1), t = t0 + i * rnd(0.85, 1.15);
       const p = panner(rnd(-0.35, 0.35), -0.9, -1.8 + 2.7 * k);
       playTake(take('floor', joist), p, t, 0.32 + 0.5 * k, rnd(0.92, 1.08));
       lout(p, 0.35);
+      hits.push(+(t - t0).toFixed(3));
     }
+    return hits;
   };
 
   // The cellar door's latch, under the table: the thumb piece lifts (a small iron scrape and click), and half a second later the
@@ -1167,7 +1232,8 @@
   A.latch = function () {
     if (!A.ready) return;
     const t = now(), p = panner(-0.4, -1.0, -1.4);
-    if (SAMPLES.latch && SAMPLES.latch.length) { playTake(take('latch'), p, t, 0.8, 1); lout(p, 0.5); return; }
+    // (returns when the latch's last hit lands, in seconds from now: the picture ticks with it, game.js shake)
+    if (SAMPLES.latch && SAMPLES.latch.length) { const buf = take('latch'); playTake(buf, p, t, 0.8, 1); lout(p, 0.5); const h = hitsOf(buf); return h.length ? h[h.length - 1] : 0.62; }
     const burst = (at, f, q, v, d, off) => {
       const s = noiseSrc(); const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
       const g = ctx.createGain(); env(g, at, 0.001, v, d);
@@ -1185,6 +1251,7 @@
     burst(d, 1500, 2.5, 0.5, 0.03); ring(d, 780, 0.12, 0.12); ring(d, 1190, 0.06, 0.08); ring(d, 130, 0.3, 0.1);
     burst(d + 0.09, 1800, 3, 0.16, 0.02); ring(d + 0.09, 940, 0.04, 0.05);
     lout(p, 0.5);
+    return 0.62;
   };
 
   // The frame of the house working in the wind: a long low groan that crosses the room (old timber taking a gust, with the slip of
@@ -1215,6 +1282,50 @@
       t += playTake(take('scratch', clawStroke), p, t, rnd(0.35, 0.55), rnd(0.9, 1.1)) * rnd(0.85, 1.2) + rnd(0.05, 0.25);
     }
     lout(p, 0.45);
+  };
+
+  // A gouge dragged across the board in front of them (game.js fxScratch; DIRECTION.md 11): a nail down varnished wood, close, a little to
+  // the side it starts on. A recorded "gouge" take plays when there is one (the long nail drag, about four seconds); with none it is drawn
+  // for the length asked: a stick-slip of fast catches whose rate rises and falls, a low scrape under it. side: -1 the left (it starts there),
+  // 1 the right, 0 the middle. sec: how long the picture takes; short: a hostile landing's little scratch, never the recording. Returns how
+  // long it sounds (seconds), or 0 when the room is not up.
+  A.gouge = function (side, sec, short) {
+    if (!A.ready) return 0;
+    const sd = side < 0 ? -1 : side > 0 ? 1 : 0, where = { x: sd * 0.3, y: -0.34, z: -0.42, wet: 0.012 };
+    if (!short) { const n = A.rec('gouge', where, 0.85); if (n) return n; }
+    const d = Math.max(0.3, Math.min(5, sec || 2.5));
+    const buf = render(d, (data, sr) => {
+      stick(data, sr, 0.0, d * 0.96, short ? 150 : 110, short ? 190 : 150, rnd(1900, 2500), 0.004, 0.75, 0.5);
+      stick(data, sr, 0.0, d * 0.96, short ? 100 : 70, short ? 130 : 100, rnd(700, 950), 0.01, 0.35, 0.4);
+    });
+    playAt(buf, spot(where.x, where.y, where.z, { kind: 'gouge', vol: short ? 0.5 : 0.8, wet: where.wet }), 1, 1);
+    A.lastTake = { kind: 'gouge', len: d, hits: [] };
+    return d;
+  };
+  // A letter or a face splits: a few dry wooden snaps in a row, each quieter and higher, close in front of them.
+  A.splinter = function (vol) {
+    if (!A.ready) return;
+    const t = now(), v = vol == null ? 1 : vol;
+    for (const [off, f, a] of [[0, 3100, 0.5], [0.05, 2300, 0.32], [0.1, 4000, 0.22], [0.17, 2800, 0.12]]) {
+      const s = noiseSrc(), bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * rnd(0.9, 1.1); bp.Q.value = 2.2;
+      const g = ctx.createGain(); env(g, t + off, 0.001, a * v, 0.03);
+      s.connect(bp); bp.connect(g); out(g, 0.15); s.start(t + off, rnd(0, 1.5), 0.08);
+    }
+  };
+  // Water running onto the board (game.js fxStain): a soft hush of filtered noise that swells and thins over sec seconds, with a few drops
+  // in it. The glass's own break is a film and a recording; this is what the stain has to say for itself when it is called alone.
+  A.spill = function (sec) {
+    if (!A.ready) return;
+    const t = now(), d = Math.max(1.5, Math.min(8, sec || 5)), s = noiseSrc(noiseBuf, true), bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.Q.value = 0.9; bp.frequency.setValueAtTime(1100, t); bp.frequency.linearRampToValueAtTime(2300, t + d * 0.5); bp.frequency.linearRampToValueAtTime(1500, t + d);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.09, t + d * 0.3); g.gain.linearRampToValueAtTime(0.05, t + d * 0.7); g.gain.linearRampToValueAtTime(0.0001, t + d);
+    s.connect(bp); bp.connect(g); out(g, 0.2); s.start(t, rnd(0, 1)); s.stop(t + d + 0.05);
+    for (let i = 0, n = 3 + Math.floor(Math.random() * 3); i < n; i++) {
+      const at = t + d * (0.35 + 0.6 * Math.random()), o = ctx.createOscillator(), og = ctx.createGain();
+      o.frequency.setValueAtTime(rnd(900, 1500), at); o.frequency.exponentialRampToValueAtTime(rnd(300, 500), at + 0.09);
+      env(og, at, 0.004, rnd(0.03, 0.07), 0.1); o.connect(og); out(og, 0.3); o.start(at); o.stop(at + 0.2);
+    }
   };
 
   // Footsteps across the ceiling: someone walking slowly on the boards upstairs, coming from one side (dir -1 from the left, 1 from the
@@ -1431,19 +1542,9 @@
     return true;
   };
   // A name, whispered, only if this computer has a real whisper voice. Never more than once a minute.
-  let lastSay = -Infinity;
-  A.say = function (text) {
-    if (QUIET || mutedNow || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return false;
-    if (Date.now() - lastSay < 60000) return false;
-    let v = null;
-    try { v = speechSynthesis.getVoices().find((x) => /whisper/i.test(x.name)); } catch (e) { return false; }
-    if (!v) return false;
-    const u = new SpeechSynthesisUtterance(String(text).toLowerCase());
-    u.voice = v; u.volume = 0.35; u.rate = 0.65; u.pitch = 0.7;
-    try { speechSynthesis.speak(u); } catch (e) { return false; }
-    lastSay = Date.now();
-    return true;
-  };
+  // Off (2026-10-08, with the synthesized whisper above): a computer's own "whisper" voice is a synthesized human voice, and nothing at this
+  // table is allowed to be one. The demon's words at the ear are the site's recorded voice (A.earVoice), never the browser's.
+  A.say = function () { return false; };
 
   // ---------- the way up the drive (the exterior shot's own sound) ----------
   // A quiet country night and nothing else: three crickets far off in the grass, each at its own pitch and its own beat; now and then a breath
@@ -1587,7 +1688,7 @@
 
   // the room's own sounds and the demon's: the house waits for each to ring out before it settles on its own (earVoice: its whisper from
   // the site, at their ear, which plays its own decoded buffer and not through A.rec)
-  ['rec', 'knock', 'creak', 'steps', 'house', 'latch', 'floorLoad', 'breath', 'claw', 'earVoice'].forEach((k) => {
+  ['rec', 'knock', 'creak', 'steps', 'house', 'latch', 'floorLoad', 'breath', 'claw', 'earVoice', 'gouge', 'splinter', 'spill'].forEach((k) => {
     const f = A[k]; if (typeof f !== 'function') return;
     A[k] = function () { if (ctx) BED.lastRoom = now(); return f.apply(this, arguments); };
   });

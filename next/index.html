@@ -134,6 +134,11 @@ body.playing #dock { opacity: 1; transform: none; pointer-events: auto; }
    the way a film opens on a title card. A touch goes on; a return visit's card goes by itself after a moment. */
 #warn { position: fixed; inset: 0; z-index: 46; display: grid; place-items: center; padding: 24px 16px; box-sizing: border-box; background: #000; transition: opacity 1.1s; cursor: pointer; }
 #warn.out { opacity: 0; pointer-events: none; }
+/* his card (a handwritten photograph of old paper, 2026-10-07): shown as it is, only sized and placed; the CSS card below it is the fallback if the image fails */
+#warn .cardImg { display: block; width: min(680px, 92vw); max-height: 92vh; object-fit: contain; filter: drop-shadow(0 18px 40px rgba(0,0,0,.85)); animation: cardImgIn 1.8s cubic-bezier(.2,.8,.3,1) both; }
+@keyframes cardImgIn { 0% { opacity: 0; transform: translateY(10px); } 60% { opacity: 1; } 100% { opacity: 1; transform: none; } }
+#warn:not(.nocard) .index { display: none; }
+#warn.nocard .cardImg { display: none; }
 #warn[hidden] { display: none !important; }
 #warn .index { width: min(460px, 100%); box-sizing: border-box; display: grid; gap: 12px; background: var(--paper); color: var(--pencil); border-radius: 3px; padding: 30px 24px 18px; transform: rotate(-1.4deg); box-shadow: 0 18px 60px rgba(0,0,0,.9), 0 0 120px rgba(255,150,70,.06); background-image: linear-gradient(to bottom, transparent 24px, rgba(190,60,60,.45) 24px, rgba(190,60,60,.45) 25px, transparent 25px), repeating-linear-gradient(to bottom, transparent 0 33px, rgba(70,110,170,.2) 33px 34px); animation: warnIn 1.8s cubic-bezier(.2,.8,.3,1) both; filter: brightness(.92) sepia(.08); }
 #warn .h { margin: 0 0 2px; font-family: var(--print); font-size: 15px; letter-spacing: .2em; text-transform: uppercase; color: #6d2a22; }
@@ -376,7 +381,46 @@ body.short #toast { bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); left:
 #tq.edited { transition: opacity .9s; }
 #tq.edited.fading { opacity: 0; }
 #share[hidden], #note[hidden], #dare[hidden] { display: none !important; }
+
+/* ---------- desktop only (Pierce, 2026-10-08: "Why don't we 100% make this a desktop-only experience.") ----------
+   A phone, or a window too narrow, gets this page and not the game (html.gated, set by the first script below, before anything is drawn;
+   the game's own scripts start nothing while it is on). One card in plain words, the address written out, and a button that sends it to yourself.
+   There is no way past it but a wider window; ?debug (the tests' page) never shows it. */
+#gate { display: none; }
+html.gated #c, html.gated #hud, html.gated #transcript, html.gated #dare, html.gated #dock, html.gated #establish, html.gated #toast,
+html.gated #pew, html.gated #share, html.gated #warn, html.gated #intro { display: none !important; }
+html.gated #gate { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; box-sizing: border-box; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: calc(env(safe-area-inset-top, 0px) + 24px) 16px calc(env(safe-area-inset-bottom, 0px) + 24px);
+  background: linear-gradient(rgba(0,0,0,.66), rgba(0,0,0,.86)), url(assets/places/farmhouse-exterior-port.jpg) center / cover no-repeat, #000; }
+#gate .gate-in { width: min(460px, 100%); display: grid; gap: 22px; justify-items: center; margin: auto; }
+#gate h1 { margin: 0; font-family: var(--print); font-weight: 400; font-size: clamp(34px, 11vw, 64px); letter-spacing: .14em; line-height: .95; color: var(--wax); text-align: center; text-shadow: 0 0 40px rgba(255,160,80,.18); }
+#gate .index { width: 100%; box-sizing: border-box; display: grid; gap: 14px; background: var(--paper); color: var(--pencil); border-radius: 3px; padding: 28px 22px 22px; transform: rotate(-1.2deg);
+  box-shadow: 0 18px 60px rgba(0,0,0,.9), 0 0 120px rgba(255,150,70,.06); filter: brightness(.94) sepia(.08);
+  background-image: linear-gradient(to bottom, transparent 24px, rgba(190,60,60,.45) 24px, rgba(190,60,60,.45) 25px, transparent 25px), repeating-linear-gradient(to bottom, transparent 0 33px, rgba(70,110,170,.2) 33px 34px); }
+#gate .index p { margin: 0; font-family: var(--hand); font-size: clamp(20px, 5.4vw, 25px); line-height: 1.32; }
+#gate .index .addr { font-family: var(--fell); font-size: clamp(17px, 4.6vw, 20px); letter-spacing: .02em; overflow-wrap: anywhere; -webkit-user-select: all; user-select: all; color: #26211b; }
+#gate .index .said { min-height: 1.3em; font-size: clamp(18px, 4.8vw, 21px); color: #6d2a22; }
+#gate .index .wide { font-size: clamp(18px, 4.8vw, 21px); color: rgba(58,55,50,.75); }
+#gateSend { justify-self: start; min-height: 44px; background: #1a120a; color: var(--wax); border: 0; border-radius: 999px; padding: 10px 24px; font-family: var(--print); letter-spacing: .08em; font-size: 16px; cursor: pointer; }
+#gateSend:hover { background: #2a1d10; }
 </style>
+<script>
+// DESKTOP ONLY (Pierce, 2026-10-08). A phone (a touch screen with nothing to hover with) or a window narrower than 900 px, loaded without ?debug,
+// gets the page below and not the game: window.GOODBYE_GATE.on is true, html.gated hides everything but #gate, and audio.js, game.js and
+// fullscreen.js start nothing. The window grows wide enough (and is not a touch screen): the script after the gate loads them, and it is the
+// game. ?debug (the tests' page) skips all of it.
+(function () {
+  var debug = /[?&]debug\b/.test(location.search);
+  function why() {
+    var touch = false;
+    try { touch = matchMedia('(pointer: coarse)').matches && matchMedia('(hover: none)').matches; } catch (e) { /* no media queries */ }
+    return touch ? 'touch' : window.innerWidth < 900 ? 'narrow' : '';
+  }
+  var G = window.GOODBYE_GATE = { on: false, debug: debug, why: debug ? '' : why(), test: why, min: 900 };
+  G.on = !!G.why;
+  if (G.on) document.documentElement.classList.add('gated');
+})();
+</script>
 </head>
 <body>
 <canvas id="c" aria-label="A talking board on a farmhouse table. Drag to move the planchette."></canvas>
@@ -406,6 +450,20 @@ body.short #toast { bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); left:
 
 <div id="establish" hidden><img id="estImg" alt="" crossorigin="anonymous"><video id="estVid" playsinline preload="auto" aria-hidden="true"></video></div>
 <div id="toast" hidden></div>
+
+<section id="gate" aria-labelledby="gateH">
+  <div class="gate-in">
+    <h1 id="gateH">GOOD BYE</h1>
+    <div class="index">
+      <p>This one is for a laptop in a dark room. Wear headphones.</p>
+      <p>It won't start on a phone or a tablet. Open this same address on your laptop.</p>
+      <p class="addr" id="gateAddr"></p>
+      <button type="button" id="gateSend">Send myself the link</button>
+      <p class="said" id="gateSaid" role="status" aria-live="polite"></p>
+      <p class="wide" id="gateWide" hidden>On a laptop already? Make this window wider.</p>
+    </div>
+  </div>
+</section>
 
 <section id="pew" hidden aria-label="The Pew">
   <div class="agp-transition-overlay" id="agp-transitionOverlay"></div>
@@ -468,7 +526,8 @@ body.short #toast { bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); left:
   </div>
 </div>
 
-<div id="warn" role="dialog" aria-modal="true" aria-labelledby="warnH" hidden>
+<div id="warn" role="dialog" aria-modal="true" aria-label="Before you sit down" hidden>
+  <img class="cardImg" src="assets/real/card-before.webp" alt="Before you sit down. Nothing at this table is written ahead of time. What answers is live, and it answers only you. Wear headphones. Turn the lights off. To stop at any time, press and hold a candle. And always say goodbye. If you are in a hard place right now, let this wait for another night. Touch the card to go on." decoding="async" onerror="this.parentNode.classList.add('nocard')">
   <div class="index">
     <p id="warnH" class="h">Before you sit down</p>
     <p>Nothing at this table is written ahead of time. What answers is live, and it answers only you.</p>
@@ -492,9 +551,61 @@ body.short #toast { bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); left:
   <button id="fsIntro" type="button" hidden>Full screen</button>
 </div>
 
-<script src="audio.js?v=fc80f22337"></script>
+<script>
+// The gate's own work (the first script in this page decided whether it is on). The address in plain words; the button sends the link to
+// yourself, through the share sheet where the browser has one, else by copying it and saying so; and when the window becomes wide enough
+// (a laptop's window dragged wider, never a touch screen) the page leaves the gate and starts the game by loading its scripts again.
+(function () {
+  var G = window.GOODBYE_GATE;
+  if (!G) return;
+  var $ = function (id) { return document.getElementById(id); };
+  var send = $('gateSend'), said = $('gateSaid'), addr = $('gateAddr'), wide = $('gateWide');
+  // (the link carries the whole address, so a link somebody was sent to a night still opens that night on the laptop)
+  var link = function () { return location.href.replace(/#.*$/, ''); };
+  if (addr) addr.textContent = location.host + location.pathname.replace(/index\.html$/, '').replace(/\/$/, '');
+  var say = function (t) { if (said) said.textContent = t; };
+  function copyFallback(text) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+      var ok = document.execCommand('copy'); document.body.removeChild(ta);
+      return !!ok;
+    } catch (e) { return false; }
+  }
+  function copy(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(function () { return true; }, function () { return copyFallback(text); });
+    return Promise.resolve(copyFallback(text));
+  }
+  function viaCopy(text) {
+    copy(text).then(function (ok) { say(ok ? 'Copied. Paste it into a message to yourself.' : 'Copy the address above and send it to yourself.'); });
+  }
+  if (send) send.addEventListener('click', function () {
+    var url = link();
+    if (navigator.share) {
+      navigator.share({ title: 'GOOD BYE', url: url }).then(function () { say(''); }, function (e) { if (!(e && e.name === 'AbortError')) viaCopy(url); });
+    } else viaCopy(url);
+  });
+  var left = !G.on;   // (not gated when the page loaded: the scripts below are the game, and there is nothing to leave)
+  function sync() {
+    if (left) return;
+    var why = G.test();
+    if (wide) wide.hidden = why !== 'narrow';   // only a window that is merely narrow is asked to be wider
+    if (why) return;
+    left = true; G.on = false; G.why = '';
+    document.documentElement.classList.remove('gated');
+    var names = /(?:^|\/)(audio|places|game|fullscreen)\.js(?:\?|$)/, srcs = [];
+    Array.prototype.forEach.call(document.querySelectorAll('script[src]'), function (s) { if (names.test(s.getAttribute('src'))) srcs.push(s.src); });
+    srcs.forEach(function (src) { var s = document.createElement('script'); s.src = src; s.async = false; document.body.appendChild(s); });
+  }
+  addEventListener('resize', sync);
+  addEventListener('orientationchange', sync);
+  sync();
+})();
+</script>
+<script src="audio.js?v=82ed1b7a0c"></script>
 <script src="places.js?v=15464ddff7"></script>
-<script src="game.js?v=3e4b0de490"></script>
-<script src="fullscreen.js?v=858b760e85"></script>
+<script src="game.js?v=5f127f3f5d"></script>
+<script src="fullscreen.js?v=7141f6b697"></script>
 </body>
 </html>

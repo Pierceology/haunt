@@ -1,6 +1,7 @@
 // Full screen, where the browser allows it (desktop and Android; iPhone Safari can't, so the button stays hidden there).
 (() => {
   'use strict';
+  if (window.GOODBYE_GATE && window.GOODBYE_GATE.on) return;   // the desktop-only page (index.html): nothing here starts on a phone
   const btn = document.getElementById('fsBtn');
   const intro = document.getElementById('fsIntro');
   if (!btn) return;
