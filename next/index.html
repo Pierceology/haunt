@@ -131,7 +131,7 @@ body.playing #dock { opacity: 1; transform: none; pointer-events: auto; }
 #share .index { width: min(440px, 100%); box-sizing: border-box; display: grid; gap: 14px; background: var(--paper); color: var(--pencil); border-radius: 3px; padding: 26px 22px 20px; transform: rotate(-1.2deg); box-shadow: 0 18px 50px rgba(0,0,0,.8), 0 0 80px rgba(255,160,80,.05); background-image: linear-gradient(to bottom, transparent 22px, rgba(190,60,60,.45) 22px, rgba(190,60,60,.45) 23px, transparent 23px), repeating-linear-gradient(to bottom, transparent 0 33px, rgba(70,110,170,.22) 33px 34px); }
 @keyframes cardIn { from { opacity: 0; transform: translateY(14px) rotate(-3deg); } to { opacity: 1; transform: rotate(-1.2deg); } }
 /* the card before the title (2026-10-05, Pierce: "we can even have a nice warning screen beforehand"): one index card, pencil on paper,
-   the way a film opens on a title card. A touch goes on; a return visit's card goes by itself after a moment. */
+   the way a film opens on a title card. It waits for a click or Enter on every visit, and the click is the first gesture that lets the sound start. */
 #warn { position: fixed; inset: 0; z-index: 46; display: grid; place-items: center; padding: 24px 16px; box-sizing: border-box; background: #000; transition: opacity 1.1s; cursor: pointer; }
 #warn.out { opacity: 0; pointer-events: none; }
 /* his card (a handwritten photograph of old paper, 2026-10-07): shown as it is, only sized and placed; the CSS card below it is the fallback if the image fails */
@@ -534,7 +534,7 @@ html.gated #gate { position: fixed; inset: 0; z-index: 70; display: grid; place-
     <p>Wear headphones. Turn the lights off.</p>
     <p>To stop at any time, press and hold a candle. And always say goodbye.</p>
     <p>If you are in a hard place right now, let this wait for another night.</p>
-    <p class="go">touch the card to go on</p>
+    <p class="go">click the card to go on</p>
   </div>
 </div>
 
@@ -605,7 +605,7 @@ html.gated #gate { position: fixed; inset: 0; z-index: 70; display: grid; place-
 </script>
 <script src="audio.js?v=82ed1b7a0c"></script>
 <script src="places.js?v=13cf6bf80a"></script>
-<script src="game.js?v=5f127f3f5d"></script>
+<script src="game.js?v=d974b29f1c"></script>
 <script src="fullscreen.js?v=7141f6b697"></script>
 </body>
 </html>

@@ -8953,27 +8953,27 @@
   addEventListener('focusin', (e) => { if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) { pinScroll(); readVV(); setTimeout(() => { pinScroll(); readVV(); }, 120); } });
   addEventListener('focusout', () => { FOCUS.out = performance.now(); setTimeout(readVV, 0); });
   // ---- the card before the title (2026-10-05, Pierce: "we can even have a nice warning screen beforehand"): one index card in pencil,
-  // the way a film opens on a title card: what this is, headphones and the dark, how to stop, and that it is not for a hard night. The
-  // first visit keeps it until it is touched; a return visit shows it a moment and lets it go (a touch takes it sooner). The touch is also
-  // the first gesture: the sound is made ready then (A.prime), and the house's recordings are decoded while they read the title.
+  // the way a film opens on a title card: what this is, headphones and the dark, how to stop, and that it is not for a hard night. It waits
+  // for a click (or Enter) on EVERY visit, the first and every one after it (2026-10-08, Pierce: the card "goes away on its own so no one
+  // can read it, and we need [the click] for sound to be allowed"): it never lets itself go. The click is the first gesture: the sound is
+  // made ready then (A.prime), and the house's recordings are decoded while they read the title.
   // (A test copy, ?debug or ?quiet, skips it unless it asks for it with ?warn.)
   (function warnCard() {
     const el = $('#warn'); if (!el) return;
     if (/[?&](debug|quiet)\b/.test(location.search) && !/[?&]warn\b/.test(location.search)) return;
     const seen = +store.get('warned', 0) || 0;
     el.hidden = false;
-    let gone = false, auto = 0;
-    const hide = (touched) => {
-      if (gone) return; gone = true; clearTimeout(auto);
+    let gone = false;
+    const hide = () => {
+      if (gone) return; gone = true;
       store.set('warned', seen + 1);
-      if (touched) { try { A.prime(); if (A.samples && PL) A.samples('assets/sfx/' + PL.id + '/'); } catch (e) { /* the strike makes it ready instead */ } }
+      try { A.prime(); if (A.samples && PL) A.samples('assets/sfx/' + PL.id + '/'); } catch (e) { /* the strike makes it ready instead */ }
       el.classList.add('out');
       setTimeout(() => { el.hidden = true; el.classList.remove('out'); }, 1150);
     };
-    el.addEventListener('click', () => hide(true));
-    const key = (e) => { if (gone) { removeEventListener('keydown', key); return; } if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') { e.preventDefault(); hide(true); } };
+    el.addEventListener('click', hide);
+    const key = (e) => { if (gone) { removeEventListener('keydown', key); return; } if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); hide(); } };   // (not Escape: a browser does not count Escape as a gesture, and the sound would stay shut)
     addEventListener('keydown', key);
-    if (seen >= 1) auto = setTimeout(() => hide(false), 3400);
   })();
   layout(); makeGrain();
   const fontsReady = document.fonts && document.fonts.load
