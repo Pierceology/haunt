@@ -122,6 +122,40 @@
     startAmbience();
     startScrape();
   };
+  // ---------- the air: a floor under everything (Pierce, 2026-10-08: "sounds seem to start over and it can be abrupt ... we have no consistent
+  // white noise sometimes") ----------
+  // The room's own low pressure (room-tone-kitchen) is nothing above 140 Hz, which a laptop's speakers cannot play, and the wind, the crickets
+  // and the clock each come and go on their own levels, so on a laptop a sound begins out of silence and ends into it, and everything seems to
+  // start over. This is one soft, steady, broadband hush (pink noise, 90 Hz to 3.8 kHz, seven seconds looped with a crossfade so the join cannot
+  // be heard, breathing a few percent on a 20 s swell) that is on from the first touch, on the room's bus, and never moves: nothing fades it, a
+  // hush does not touch it, a held candle does not take it. Only the one silence cut (A.silence) goes through it, because that is the bus.
+  const AIR = { src: null, g: null };
+  function startAir() {
+    if (AIR.src || !ctx || !bus || window.GOODBYE_NO_AIR) return;   // (the offline checks set the flag: they measure the sounds, not the floor)
+    try {
+      const sr = ctx.sampleRate, n = Math.floor(sr * 7), fade = Math.floor(sr * 0.6), buf = ctx.createBuffer(2, n, sr);
+      for (let c = 0; c < 2; c++) {
+        const d = buf.getChannelData(c); let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+        for (let i = 0; i < n; i++) {
+          const w = Math.random() * 2 - 1;
+          b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.969 * b2 + w * 0.153852; b3 = 0.8665 * b3 + w * 0.3104856;
+          b4 = 0.55 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.016898;
+          d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11; b6 = w * 0.115926;
+        }
+        for (let i = 0; i < fade; i++) { const a = i / fade; d[i] = d[i] * Math.sin(a * Math.PI / 2) + d[n - fade + i] * Math.cos(a * Math.PI / 2); }
+        let e = 0; for (let i = 0; i < n - fade; i++) e += d[i] * d[i];
+        const k = 0.1 / (Math.sqrt(e / (n - fade)) || 1); for (let i = 0; i < n; i++) d[i] *= k;
+      }
+      const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true; src.loopStart = 0; src.loopEnd = (n - fade) / sr;
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 90; hp.Q.value = 0.5;
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3800; lp.Q.value = 0.5;
+      const g = ctx.createGain(); g.gain.value = 0.11;
+      const lfo = ctx.createOscillator(); lfo.frequency.value = 0.05; const lg = ctx.createGain(); lg.gain.value = 0.009; lfo.connect(lg); lg.connect(g.gain); lfo.start();
+      src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(bus); src.start(0, Math.random() * 5);
+      AIR.src = src; AIR.g = g;
+    } catch (e) { /* no air: the room is as it was */ }
+  }
+  A.airLevel = function () { return AIR.g ? AIR.g.gain.value : 0; };
   function makeCtx(AC) {
     ctx = new AC();
     master = ctx.createGain(); master.gain.value = QUIET ? 0 : 0.9;
@@ -132,6 +166,7 @@
     comp.connect(ctx.destination);
     try { ctx.onstatechange = () => { A.ctxState = ctx.state; if (ctx.state !== 'running' && !document.hidden) A.wake(); }; } catch (e) { /* no statechange */ }
     bus = ctx.createGain(); bus.gain.value = 1; bus.connect(master);
+    startAir();
     verb = ctx.createConvolver(); verb.buffer = impulse(3.4, 2.4);
     const vg = ctx.createGain(); vg.gain.value = 0.5; verb.connect(vg); vg.connect(bus);
     noiseBuf = makeNoise(2, false);
@@ -349,7 +384,7 @@
     BED.loading = dir;
     for (const [k, list] of Object.entries(BED_FILES)) {
       for (const f of list) {
-        try { const r = await fetch(dir + f); if (!r.ok) continue; const b = await A.decode(await r.arrayBuffer()); if (b) (BED.buf[k] = BED.buf[k] || []).push(b); } catch (e) { /* that one is left out */ }
+        try { const r = await fetch(dir + f); if (!r.ok) continue; const b = await A.decode(await r.arrayBuffer()); if (b) { (BED.buf[k] = BED.buf[k] || []).push(b); NAME.set(b, f); } } catch (e) { /* that one is left out */ }
       }
       if (k === 'siding' || k === 'low') bedLoop(k);
     }
@@ -541,13 +576,27 @@
   // the first time it is needed) and played through the room's panner. If there are recordings (assets/sfx/<place>/, named in its
   // manifest.json: A.samples) one of those is played instead; these are the fallback.
   const TAKES = {}, SAMPLES = {};
-  // Recorded takes that are decoded and counted but never played: the closed-mouth hums (Pierce, 2026-10-08, "one sound ... ooh, oh, oh,
+  // Recorded takes that are never fetched and never played: the closed-mouth hums (Pierce, 2026-10-08, "one sound ... ooh, oh, oh,
   // oh ... so laughable. You've got to remove that."). Measured (tools/house/voiced.py): hum-behind-1 and -2 are
   // 100% voiced at about 110 Hz with every bit of their energy under 500 Hz, ponder-hum-2 is 91% voiced at 85 Hz; the pondering plays one of
   // the pool every two or three seconds the whole time the demon is deciding, which is "oh, oh, oh, oh". Turn VOICED_OFF back to an empty
   // pattern (/^$/) to hear them again. The files stay where they are.
   const VOICED_OFF = /^(?:ponder-hum|hum-behind)-\d+\.mp3$/, OFF = new WeakSet();
   const usable = (kind) => { const l = SAMPLES[kind]; return l && l.some((b) => OFF.has(b)) ? l.filter((b) => !OFF.has(b)) : l; };
+  // Which files of a manifest's list are fetched: the ones that may play, and only then the first few of them. (The cap of six used to be
+  // counted before the switched-off files were left out, so the ponder list, whose first two files are the hums, loaded four of its sixteen:
+  // two takes, twice each, and the pondering was the same breath and click all night.) CAP: the pondering has room for the eight that are left.
+  const CAP = { ponder: 8 }, CAP_DEFAULT = 6, NAME = new WeakMap();
+  // The regulator (Pierce and a tester, 2026-10-08: the recorded breaths sound like "underwater oxygen", a diving regulator): every recorded take
+  // of the breath family is switched off like the hums, so the sfx "breath" and "gasp" and the pondering never play one: the breath-* takes
+  // (slow-behind, exhale-long, wet-under-table, voice, intake-sharp), guttural-breath, inhale-close, low-exhale, teeth-breath. A breath or a gasp is
+  // the synthesized exhale (A.breath) until the dry takes come: any file named breath-nose-* or breath-ear-* (dropped into assets/sfx/<place>/ and
+  // listed in its manifest.json) is exempt, so it comes on by itself when it arrives. The files stay where they are.
+  const BREATH_TAKES_OFF = /^(?:breath-|guttural-breath-|inhale-close-|low-exhale-|teeth-breath-)/, BREATH_DRY_ON = /^breath-(?:nose|ear)-/;
+  const isOff = (f) => VOICED_OFF.test(f) || (BREATH_TAKES_OFF.test(f) && !BREATH_DRY_ON.test(f));
+  const takeNames = (m, k) => (Array.isArray(m[k]) ? m[k] : []).filter((f) => typeof f === 'string' && /^[\w.\-]+$/.test(f) && !isOff(f)).slice(0, CAP[k] || CAP_DEFAULT);
+  A.wantedTakes = (m) => Object.keys(m || {}).reduce((n, k) => n + takeNames(m, k).length, 0);   // (a test's look: how many takes a manifest asks to have decoded)
+  A.usableTakes = (kind) => (usable(kind) || []).map((b) => NAME.get(b) || '');   // (a test's look: the files that may play for this kind)
   const rn = () => Math.random() * 2 - 1;
   function render(sec, fn) {
     const sr = ctx.sampleRate, b = ctx.createBuffer(1, Math.max(1, Math.floor(sec * sr)), sr), d = b.getChannelData(0);
@@ -578,6 +627,17 @@
       const u = (t - at) / dur, rate = r0 + (r1 - r0) * u, a = amp * Math.pow(Math.sin(Math.PI * u), 0.8) * (0.3 + 0.7 * Math.random());
       modes(d, sr, t, [[fc * (0.9 + 0.2 * Math.random()), t60, a], [fc * 2.07, t60 * 0.6, a * 0.4], [fc * 0.5, t60 * 1.4, a * 0.3]], 1);
       t += (1 / rate) * (1 + jitter * rn());
+    }
+  }
+  // A scratch that cannot be mistaken for a voice: grains of dry noise at irregular, Poisson-spaced moments (the rate glides from r0 to r1 a
+  // second), never an even pulse train through a resonance. The old scratch was exactly that (pulses at 100 to 190 a second, each ringing near
+  // 2 kHz), which is how a duck's quack is made: Pierce, 2026-10-08: "scratch marks sound like ducks".
+  function rasp(d, sr, at, dur, r0, r1, amp, msMax, hpMin) {
+    let t = at;
+    while (t < at + dur) {
+      const u = (t - at) / dur, rate = r0 + (r1 - r0) * u, a = amp * Math.pow(Math.sin(Math.PI * u), 0.7) * (0.15 + 0.85 * Math.random() * Math.random());
+      click(d, sr, t, a, 1 + (msMax - 1) * Math.random(), hpMin + (0.95 - hpMin) * Math.random());
+      t += -Math.log(1 - Math.random()) / rate;
     }
   }
   A.recorded = 0;   // how many times a recorded take was played in place of a synthesized one (a test's look)
@@ -658,8 +718,8 @@
       const m = await r.json();
       for (const k of kinds || []) {
         if (SAMPLES[k] && SAMPLES[k].length) continue;
-        for (const f of (Array.isArray(m[k]) ? m[k] : []).slice(0, 6)) {
-          if (typeof f !== 'string' || !/^[\w.\-]+$/.test(f) || RAW[dir + f]) continue;
+        for (const f of takeNames(m, k)) {
+          if (RAW[dir + f]) continue;
           const rr = await fetch(dir + f); if (rr.ok) RAW[dir + f] = await rr.arrayBuffer();
         }
       }
@@ -673,15 +733,12 @@
       const r = await fetch(dir + 'manifest.json', { cache: 'no-store' }); if (!r.ok) return 0;
       const m = await r.json();
       const jobs = [];
-      for (const k of Object.keys(m || {})) {
-        if (!Array.isArray(m[k])) continue;
-        for (const f of m[k].slice(0, 6)) if (typeof f === 'string' && /^[\w.\-]+$/.test(f)) jobs.push([k, f]);
-      }
+      for (const k of Object.keys(m || {})) for (const f of takeNames(m, k)) jobs.push([k, f]);
       // (2026-10-05, Pierce: "maybe finding sounds were taking too long") In the order they are needed: the match on the title; the
       // pondering (every move); the first take of each sound the house and the taking use early (a knock, a creak, the floor, the latch,
       // the frame, a breath, the slam, the snuff); then everything else. The early ones go six at a time; the rest two at a time, so the
       // films and the flames are never starved while the night begins. A kind's first take comes before any kind's second.
-      const FIRST = ['match', 'ponder', 'knock', 'creak', 'floor', 'latch', 'house', 'breath', 'slam', 'snuff', 'knocks', 'steps', 'whisper', 'shh', 'near', 'gasp', 'hum', 'drag', 'rattle'];
+      const FIRST = ['match', 'ponder', 'knock', 'creak', 'floor', 'latch', 'house', 'breath', 'slam', 'snuff', 'knocks', 'steps', 'whisper', 'shh', 'near', 'gasp', 'drag', 'rattle', 'walls'];   // (walls: the television on the way up the drive, A.approach)
       const rank = (k) => { const i = FIRST.indexOf(k); return i < 0 ? FIRST.length : i; };
       const nth = {};
       for (const j of jobs) { nth[j[0]] = (nth[j[0]] || 0) + 1; j.push(nth[j[0]]); }
@@ -696,7 +753,8 @@
               let ab = RAW[dir + f];
               if (ab) delete RAW[dir + f]; else { const rr = await fetch(dir + f); if (!rr.ok) continue; ab = await rr.arrayBuffer(); }
               const b = await A.decode(ab); if (!b) continue;
-              if (VOICED_OFF.test(f)) OFF.add(b);
+              if (isOff(f)) OFF.add(b);   // (not reached: such a take is not fetched; so a take that got in some other way still never plays)
+              NAME.set(b, f);
               (SAMPLES[k] = SAMPLES[k] || []).push(b); n++;
             } catch (e) { /* that one take is skipped */ }
           }
@@ -986,19 +1044,26 @@
     }
   };
 
-  // Someone breathing close to your ear. 'under': slow and low, centred, from under the table (one long breath in, one out).
+  // Someone breathing close to your ear. 'under': slow and low, centred, from under the table. A recorded dry take (breath-nose-*, breath-ear-*) if
+  // there is one; the recorded regulator takes are off (BREATH_TAKES_OFF), so mostly this is one synthesized exhale: brown noise in a band at about
+  // 480 Hz and nothing above 1.1 kHz, a soft start, then a long fall. One breath out, no swell and no pair of them, so it is a breath and not a
+  // hiss, and never a regulator's in and out. Half the level the swelling pair had (peak 6 dB down).
+  function exhale(p, t, d, f, v) {
+    const s = noiseSrc(brownBuf, true), bp = ctx.createBiquadFilter(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
+    bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 0.9; lp.type = 'lowpass'; lp.frequency.value = 1100; lp.Q.value = 0.5;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.07); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    s.connect(bp); bp.connect(lp); lp.connect(g); g.connect(p); s.start(t, rnd(0, 4)); s.stop(t + d + 0.05);
+  }
   A.breath = function (side) {
     if (!A.ready) return;
     const t = now(), under = side === 'under';
     const p = under ? panner(0, -0.9, -0.7) : panner(side === 'right' ? 0.5 : -0.5, 0, 0.25);
-    if (SAMPLES.breath && SAMPLES.breath.length) { playTake(take('breath'), p, t, under ? 0.7 : 0.5, under ? 0.85 : 1); if (under) lout(p, 0.25); else out(p, 0.1); return; }
-    (under ? [[0, 2.1, 0.3], [2.5, 2.6, 0.26]] : [[0, 1.1, 0.35], [1.3, 1.4, 0.28]]).forEach(([off, d, v]) => {
-      const s = noiseSrc(noiseBuf, true); const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = under ? (off ? 340 : 480) : (off ? 520 : 760); bp.Q.value = under ? 1.2 : 1.6;
-      const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t + off); g.gain.linearRampToValueAtTime(v, t + off + d * 0.45); g.gain.linearRampToValueAtTime(0.0001, t + off + d);
-      s.connect(bp); bp.connect(g); g.connect(p); s.start(t + off, rnd(0, 1)); s.stop(t + off + d + 0.05);
-    });
+    const rec = usable('breath');   // (not SAMPLES.breath: a take that is switched off is in that list, and take() would then have nothing to give)
+    if (rec && rec.length) { playTake(take('breath'), p, t, under ? 0.7 : 0.5, under ? 0.85 : 1); if (under) lout(p, 0.25); else out(p, 0.1); return; }
+    if (under) exhale(p, t, rnd(1.5, 1.9), 440, EXHALE_UNDER); else exhale(p, t, rnd(0.8, 1.1), 520, EXHALE_SIDE);
     if (under) lout(p, 0.25); else out(p, 0.1);
   };
+  const EXHALE_SIDE = 0.25, EXHALE_UNDER = 0.2;
 
   // ---------- the room: what the house itself does ----------
   // The possession is a room filling up with sound. Everything it does goes through one layer gain (a fresh one after each stop),
@@ -1271,8 +1336,8 @@
   // (A stick-slip of nails on dry pine: a fast train of tiny catches whose rate rises and falls through each stroke.) A recording named
   // "scratch" in the place's manifest plays in its place.
   const clawStroke = () => render(1.0, (d, sr) => {
-    stick(d, sr, 0.02, rnd(0.45, 0.7), rnd(140, 190), rnd(80, 120), rnd(1700, 2500), 0.004, 0.8, 0.45);
-    stick(d, sr, 0.04, rnd(0.4, 0.6), rnd(90, 130), rnd(50, 80), rnd(700, 950), 0.01, 0.35, 0.4);
+    rasp(d, sr, 0.02, rnd(0.45, 0.7), rnd(70, 100), rnd(40, 60), 0.8, 4, 0.6);
+    rasp(d, sr, 0.04, rnd(0.4, 0.6), rnd(24, 36), rnd(14, 22), 0.35, 8, 0.3);
   });
   A.claw = function () {
     if (!A.ready) return;
@@ -1295,8 +1360,8 @@
     if (!short) { const n = A.rec('gouge', where, 0.85); if (n) return n; }
     const d = Math.max(0.3, Math.min(5, sec || 2.5));
     const buf = render(d, (data, sr) => {
-      stick(data, sr, 0.0, d * 0.96, short ? 150 : 110, short ? 190 : 150, rnd(1900, 2500), 0.004, 0.75, 0.5);
-      stick(data, sr, 0.0, d * 0.96, short ? 100 : 70, short ? 130 : 100, rnd(700, 950), 0.01, 0.35, 0.4);
+      rasp(data, sr, 0.0, d * 0.96, short ? 85 : 60, short ? 120 : 90, 0.75, 4, 0.6);
+      rasp(data, sr, 0.0, d * 0.96, short ? 26 : 20, short ? 40 : 32, 0.35, 8, 0.3);
     });
     playAt(buf, spot(where.x, where.y, where.z, { kind: 'gouge', vol: short ? 0.5 : 0.8, wet: where.wet }), 1, 1);
     A.lastTake = { kind: 'gouge', len: d, hits: [] };
@@ -1547,69 +1612,49 @@
   A.say = function () { return false; };
 
   // ---------- the way up the drive (the exterior shot's own sound) ----------
-  // A quiet country night and nothing else: three crickets far off in the grass, each at its own pitch and its own beat; now and then a breath
-  // of air (a narrow band that swells and fades, never a bed); a slow walk on gravel, six steps, nearer each time; and a screen door tapping once
-  // somewhere ahead. There is no noise bed and no hiss: the only noise in it is a step's grains and that breath. It sits well under the table's
-  // own room tone (the house's bed is about -27 dBFS RMS; this walk is about -40, its loudest step about -25: tools/house/audio.mjs measures both).
-  // Until the shot's own film (with its own audio) lands, this is its sound.
+  // A quiet country night, and you do not hear anyone walk (Pierce, 2026-10-08, again: "slow walk in without hearing walking, but all the sounds"): the
+  // gravel steps are gone, and nothing in this shot is a step or has a beat. A.approach(sec) is the whole of it: the wind in the grass and three
+  // crickets far off, both thinning as the house nears and gone a second before the end; a screen door tapping its frame once or twice in the wind; a
+  // porch bulb buzzing at about 115 Hz with a slow flicker, coming up over the last third; a television murmuring inside (the recorded walls-murmur
+  // through a lowpass: never a synthesized babble, which sounds like a person humming); one floorboard creak (the recorded floorboard-creak-single)
+  // near the end; then a held second with nothing in it but the room's air (the hush under the bus). Every part has a soft start and a soft end, and
+  // everything goes through the room's bus, so the steady air hush is under it and no sound starts out of silence or ends into it. There is no noise
+  // bed and no hiss. It sits well under the table's own room tone (the house's bed is about -27 dBFS RMS; tools/house/audio.mjs measures both).
+  // Until the shot's own film (with its own audio) lands, this is its sound. (The gravel steps are in git, at 84cb9c8.)
   let outG = null, nightG = null, breeze = null, nightTimer = null, nightOn = false;
   const NIGHT_VOICES = [
     { f: 4310, per: 1.37, amp: 0.026, pan: -0.7 }, { f: 4790, per: 1.09, amp: 0.021, pan: 0.55 }, { f: 3930, per: 1.83, amp: 0.019, pan: 0.15 },
   ];
   // everything outdoors goes through here: no room to speak of (a field has no reverb: 4% sent to the house's)
   const outdoors = () => { if (!outG) { outG = ctx.createGain(); outG.gain.value = 1; outG.connect(bus); const w = ctx.createGain(); w.gain.value = 0.04; outG.connect(w); w.connect(verb); } return outG; };
-  // one footstep on gravel: a soft body (the weight, low and short), then a heel and a toe, each a handful of stones shifting (a few grains,
-  // each its own pitch, 4 to 12 ms long, with gaps between), not a spray of noise. v: how loud; side: left or right foot.
-  function gravelStep(t, v, side) {
-    const p = panner(side, -1.0, -1.4);
-    const th = ctx.createOscillator(); th.type = 'sine'; th.frequency.setValueAtTime(150, t); th.frequency.exponentialRampToValueAtTime(70, t + 0.1);
-    const tg = ctx.createGain(); env(tg, t, 0.004, 0.16 * v, 0.1);
-    th.connect(tg); tg.connect(p); th.start(t); th.stop(t + 0.3);
-    const grains = (at, n, spread, vol) => {
-      for (let j = 0; j < n; j++) {
-        const tt = at + (j === 0 ? 0 : rnd(0.004, spread) * j * 0.7), len = rnd(0.005, 0.012);
-        const s = noiseSrc(); const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = rnd(900, 2300); bp.Q.value = 1.3;
-        const g = ctx.createGain(); env(g, tt, 0.0012, vol * rnd(0.25, 1), len);
-        s.connect(bp); bp.connect(g); g.connect(p); s.start(tt, rnd(0, 1.6), len + 0.02);
-      }
-    };
-    grains(t + 0.004, 6, 0.016, 0.9 * v);     // the heel: a little crunch
-    grains(t + 0.092, 5, 0.014, 0.5 * v);     // the toe, softer
-    p.connect(outdoors());
-  }
-  // Footsteps on gravel at a slow walk, getting closer. `dur` is the shot's length: six steps at most, about one and a quarter seconds apart.
-  A.gravel = function (dur) {
-    if (!A.ready) return;
-    const t0 = now(), d = dur || 8, stride = 1.2, first = 0.9;
-    const n = Math.max(1, Math.min(6, Math.floor((d - first - 0.5) / stride) + 1));
-    for (let i = 0; i < n; i++) {
-      const t = t0 + first + i * stride * rnd(0.98, 1.03), k = n > 1 ? i / (n - 1) : 1;   // k: 0 far, 1 near
-      gravelStep(t, 0.16 + 0.34 * k * k, i % 2 ? 0.25 : -0.25);
-    }
-  };
-  // A screen door on a slack spring, pushed by the wind against its frame once: a dry wooden tap, a thin twang, and a small
-  // rebound. Far off and ahead, and quiet.
-  A.screenDoor = function () {
-    if (!A.ready) return;
-    const t = now(), p = panner(1.4, 0.2, -3.2);
-    const hit = (at, v) => {
+  // A screen door on a slack spring, pushed by the wind against its frame: a dry wooden tap, a thin twang, and a small rebound. Far off and ahead,
+  // and quiet. v: how hard (1 is the first tap); to: where it goes (the way up the drive's own gain, else the outdoors).
+  function doorTap(t, v, to) {
+    const p = panner(1.4, 0.2, -3.2);
+    const hit = (at, k) => {
       const s = noiseSrc(); const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1100; bp.Q.value = 2.2;
-      const g = ctx.createGain(); env(g, at, 0.001, v, 0.05);
+      const g = ctx.createGain(); env(g, at, 0.006, k * v, 0.05);   // (a tap has an edge, but not a click: six milliseconds up)
       s.connect(bp); bp.connect(g); g.connect(p); s.start(at, rnd(0, 1.5), 0.08);
     };
     hit(t, 1.1); hit(t + 0.11, 0.44);
-    [[410, 0.14], [868, 0.07], [1590, 0.028]].forEach(([f, v]) => {
+    [[410, 0.14], [868, 0.07], [1590, 0.028]].forEach(([f, k]) => {
       const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(f * 1.03, t + 0.01); o.frequency.exponentialRampToValueAtTime(f, t + 0.25);
-      const g = ctx.createGain(); env(g, t + 0.005, 0.004, v, 0.55);
+      const g = ctx.createGain(); env(g, t + 0.005, 0.006, k * v, 0.55);
       o.connect(g); g.connect(p); o.start(t + 0.005); o.stop(t + 0.7);
     });
-    p.connect(outdoors());
-  };
+    p.connect(to || outdoors());
+  }
+  A.screenDoor = function () { if (A.ready) doorTap(now(), 1); };
+
   // The crickets' own output: it comes up slowly and goes away slowly.
   function night() {
-    if (!nightG) { nightG = ctx.createGain(); nightG.gain.value = 0.0001; nightG.connect(bus); }
+    if (!nightG) { nightG = ctx.createGain(); nightG.gain.value = 0.0001; nightG.connect(thinNode()); }
     return nightG;
   }
+  // the outdoor wind and the crickets both come through here, so the way up the drive (A.approach) can thin them together as the house nears
+  // and take them away a second before the end without fighting their own levels (A.wind, A.crickets). It is 1 whenever the shot begins.
+  let thinG = null;
+  function thinNode() { if (!thinG) { thinG = ctx.createGain(); thinG.gain.value = 1; thinG.connect(bus); } return thinG; }
   // a breath of air: brown noise through a narrow band (about 480 Hz, a whisper), swelling and fading on two slow waves so that
   // between breaths there is nothing at all. k: how much (0 takes it away).
   function breath(k) {
@@ -1618,7 +1663,7 @@
       const swell = ctx.createGain(); swell.gain.value = 0.3;
       [[0.047, 0.32], [0.113, 0.22]].forEach(([hz, a]) => { const o = ctx.createOscillator(); o.frequency.value = hz; const og = ctx.createGain(); og.gain.value = a; o.connect(og); og.connect(swell.gain); o.start(); });
       const lvl = ctx.createGain(); lvl.gain.value = 0.0001;
-      s.connect(bp); bp.connect(swell); swell.connect(lvl); lvl.connect(bus); s.start();
+      s.connect(bp); bp.connect(swell); swell.connect(lvl); lvl.connect(thinNode()); s.start();
       breeze = { lvl };
     }
     breeze.lvl.gain.setTargetAtTime(k > 0 ? 0.12 * k : 0.0001, now(), 1.2);
@@ -1662,6 +1707,98 @@
     night().gain.setTargetAtTime(lvl > 0 ? Math.min(1, lvl) : 0.0001, now(), lvl > 0 ? 1.4 : 0.4);
     if (amb.crickets) amb.crickets.gain.setTargetAtTime(lvl > 0 ? 0 : bedLevels().crickets, now(), 0.6);
   };
+  // ---------- A.approach: the way up the drive, with no step in it ----------
+  // game.js calls it with the shot's length in seconds, right after A.outside(true, true) has brought up the wind and the crickets. Everything is
+  // scheduled once, here. times are seconds from now. A.approachLog: what was scheduled (a test's look): { part, at, dur, attack, release }.
+  const APPR = { m: null, srcs: [] };
+  A.approachLog = [];
+  // a gain that comes up and goes away: nothing starts out of silence or ends into it. t: when it begins; a: seconds up; hold: seconds at peak; r: seconds down.
+  function riseFall(g, t, a, hold, r, peak) {
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + a);
+    g.gain.setValueAtTime(peak, t + a + hold); g.gain.linearRampToValueAtTime(0.0001, t + a + hold + r);
+  }
+  function approachStop(sec) {
+    const m = APPR.m; if (!m || !ctx) return;
+    APPR.m = null;
+    const t = now(), r = Math.max(0.05, sec || 0.3), srcs = APPR.srcs.splice(0);
+    m.gain.setValueAtTime(1, t); m.gain.linearRampToValueAtTime(0.0001, t + r);   // (its gain is never moved before this, so 1 is where it stands)
+    srcs.forEach(([x, end]) => { try { x.stop(Math.min(end, t + r + 0.05)); } catch (e) { /* already over */ } });   // (never later than it would have: a source ends itself)
+    A.approachLog.push({ part: 'stop', at: +t.toFixed(3) });
+  }
+  A.approach = function (sec, only) {   // (only: a test's look at some parts alone, by name)
+    if (!A.ready) return;   // no sound yet (the first touch has not been made): nothing, quietly
+    approachStop(0.05);
+    const d = Math.max(4, +sec || 8), t0 = now(), over = d - 1;   // over: everything is done a second before the end; that second is held, the air alone
+    const m = ctx.createGain(); m.gain.value = 1; m.connect(outdoors()); APPR.m = m;
+    const log = (part, at, dur, attack, release, more) => A.approachLog.push(Object.assign({ part, at: +at.toFixed(2), dur: +dur.toFixed(2), attack: +attack.toFixed(3), release: +release.toFixed(3) }, more));
+    A.approachLog.length = 0;
+    const live = (end, ...xs) => xs.forEach((x) => APPR.srcs.push([x, end])), want = (part) => !only || only.indexOf(part) >= 0;
+
+    // the wind and the crickets thin as the house nears (from a fifth of the way) and are gone at `over`
+    if (thinG && want('wind and crickets')) {
+      const g = thinG.gain; g.cancelScheduledValues(t0); g.setValueAtTime(1, t0); g.setValueAtTime(1, t0 + d * 0.2);
+      g.linearRampToValueAtTime(0.4, t0 + over - 1.6); g.linearRampToValueAtTime(0.0001, t0 + over);
+      log('wind and crickets', d * 0.2, over - d * 0.2, 1.2, 1.6);   // (their own rise is A.wind's and A.crickets': a second or so)
+    }
+
+    // the screen door taps its frame in the wind: once, and sometimes once more a moment after
+    if (want('screen door')) {
+      const tap1 = d * rnd(0.26, 0.34), taps = [tap1];
+      if (Math.random() < 0.55) taps.push(tap1 + rnd(1.0, 1.8));
+      taps.forEach((at, i) => doorTap(t0 + at, i ? 0.45 : 0.7, m));
+      log('screen door', taps[0], taps[taps.length - 1] - taps[0] + 0.7, 0.006, 0.55, { taps: taps.length });
+    }
+
+    // a television murmuring inside: a recorded walls-murmur take through a lowpass (and the low end off a speaker could not play), coming up
+    // as the house nears and going down before the end; the take itself, never a synthesized voice. No take yet: nothing.
+    const walls = usable('walls');
+    if (walls && walls.length && want('television')) {
+      const buf = walls[Math.floor(Math.random() * walls.length)], at = d * 0.18, len = Math.min(buf.duration, over - 0.4 - at), a = Math.min(1.2, len * 0.3), r = Math.min(1.0, len * 0.3);
+      const src = ctx.createBufferSource(); src.buffer = buf; src.playbackRate.value = rnd(0.97, 1.03);
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 130; hp.Q.value = 0.5;
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1200; lp.Q.value = 0.6;
+      const g = ctx.createGain(), p = panner(0.9, 0.3, -3.6);
+      src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(p); p.connect(m);
+      riseFall(g, t0 + at, a, Math.max(0, len - a - r), r, 0.45);
+      src.start(t0 + at, 0); src.stop(t0 + at + len + 0.05); live(t0 + at + len + 0.05, src);
+      log('television', at, len, a, r, { take: NAME.get(buf) || '', lowpass: 1200 });
+    }
+
+    // the porch bulb: a buzz at about 115 Hz (a saw, so there is something above 240 Hz for a laptop to play) with a slow flicker, up over the last
+    // third of the way and down before the held second; band-limited at both ends
+    if (want('porch bulb')) {
+      const at = over * 2 / 3, a = Math.min(1.5, over - at - 1.0), r = 0.7, hold = Math.max(0, over - at - a - r);
+      const f = rnd(110, 118), o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f;
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 240; hp.Q.value = 0.7;
+      const pk = ctx.createBiquadFilter(); pk.type = 'peaking'; pk.frequency.value = 650; pk.Q.value = 1; pk.gain.value = 8;   // (the 3rd to the 8th harmonic: what a small speaker plays)
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1800; lp.Q.value = 0.5;
+      const fl = ctx.createGain(); fl.gain.value = 0.74;   // the flicker: a slow wave and a faster, smaller one
+      const l1 = ctx.createOscillator(), l1g = ctx.createGain(), l2 = ctx.createOscillator(), l2g = ctx.createGain();
+      l1.frequency.value = rnd(0.6, 0.9); l1g.gain.value = 0.2; l2.frequency.value = rnd(5, 8); l2g.gain.value = 0.05;
+      l1.connect(l1g); l1g.connect(fl.gain); l2.connect(l2g); l2g.connect(fl.gain);
+      const g = ctx.createGain(), p = panner(-0.8, 1.0, -3.0);
+      o.connect(hp); hp.connect(pk); pk.connect(lp); lp.connect(fl); fl.connect(g); g.connect(p); p.connect(m);
+      riseFall(g, t0 + at, a, hold, r, 0.085);
+      const end = t0 + at + a + hold + r + 0.05;
+      [o, l1, l2].forEach((x) => { x.start(t0 + at); x.stop(end); }); live(end, o, l1, l2);
+      log('porch bulb', at, a + hold + r, a, r, { hz: +f.toFixed(1) });
+    }
+
+    // one floorboard creak inside, near the end: the recorded floorboard-creak-single (the bed's copy of it, else one from the creak list), else the house's
+    // own synthesized board; soft at both ends
+    if (want('floorboard')) {
+      const rec = (BED.buf.creak && BED.buf.creak[0]) || ((usable('creak') || []).find((b) => /^floorboard-creak-single/.test(NAME.get(b) || '')));
+      const buf = rec || boardCreak(false), len = Math.min(buf.duration, 2.2), at = Math.max(1, over - len - 0.5), a = 0.12, r = Math.min(0.5, len * 0.4);
+      const src = ctx.createBufferSource(); src.buffer = buf; src.playbackRate.value = rnd(0.97, 1.03);
+      const g = ctx.createGain(), p = panner(-0.5, -0.2, -3.0);
+      src.connect(g); g.connect(p); p.connect(m);
+      riseFall(g, t0 + at, a, Math.max(0, len - a - r), r, 0.22);
+      src.start(t0 + at, 0); src.stop(t0 + at + len + 0.05); live(t0 + at + len + 0.05, src);
+      log('floorboard', at, len, a, r, { take: rec ? NAME.get(rec) || '' : 'synthesized' });
+    }
+    A.approachLog.push({ part: 'held silence', at: +over.toFixed(2), dur: 1 });
+  };
+
   // Outside, before the door: no wall clock yet (it is the house's), the wind and the crickets are the room. Back inside, the
   // table's own bed returns.
   // bed: false when the shot has its own film (and its own sound): only the house's clock stays off, nothing is laid over it.
@@ -1670,6 +1807,7 @@
     BED.inside = !on;
     if (on) {
       const t = now();
+      if (thinG) { thinG.gain.cancelScheduledValues(t); thinG.gain.setValueAtTime(1, t); }   // (the wind and the crickets are at nothing here: they come up with A.wind and A.crickets)
       [BED.sidingG, BED.lowG].forEach((n) => { if (n) { n.gain.cancelScheduledValues(t); n.gain.setValueAtTime(0, t); } });   // the house's own layers are not out here
       if (outG) { outG.gain.cancelScheduledValues(t); outG.gain.setValueAtTime(1, t); }
       if (amb.clock) amb.clock.gain.setTargetAtTime(0, t, 0.3);
@@ -1680,7 +1818,8 @@
         A.wind(1); A.crickets(1);
       }
     } else {
-      // a footstep still on its way is faded out, not cut
+      // what is still sounding of the way up the drive (a skipped shot) is faded out, not cut
+      approachStop(0.25);
       if (outG) outG.gain.setTargetAtTime(0.0001, now(), 0.15);
       A.wind(0); A.crickets(0); A.mood();
     }

@@ -1,7 +1,6 @@
 // GOODBYE — the places. One scene template in game.js; each place is data.
-// There is one house now, the Farmhouse (the winter of 1931). The Penthouse, the Basement, the Parlor, the Cottage and the
-// Garden are gone from this file (git keeps them): five skins of one engine repeated each other, and a night in one of them
-// said things from the wrong decade. All the work goes into this one.
+// There is one house now, the Farmhouse: poor, old and peeling, with no date and no era. The Penthouse, the Basement, the Parlor, the Cottage and the
+// Garden are gone from this file (git keeps them): five skins of one engine repeated each other. All the work goes into this one.
 // A place is the room: its photographs, board, candles, light, sound and film. It holds no words for the board: every word the board
 // spells is the demon's, live (game.js liveMove; the site's backend/goodbye/demons.js). The question scripts, the room's lines, the
 // spirit and the night plan are gone (git keeps them).
@@ -10,11 +9,11 @@
 
   // art.plateHi: the same table photo resized to twice its size (Lanczos, nothing added), for big and Retina screens.
   const FARMHOUSE = {
-    id: 'farmhouse', name: 'The Farmhouse', when: 'Tonight, in Kansas',
-    caption: 'Kansas · 1:13 AM', clockStart: '1:13 AM', table: 'a farmhouse table',
+    id: 'farmhouse', name: 'The Farmhouse', when: 'Tonight',
+    caption: '1:13 AM', clockStart: '1:13 AM', table: 'a farmhouse table',
     art: { exterior: 'assets/places/farmhouse-exterior.jpg?v=9d21f78d84', exteriorPort: 'assets/places/farmhouse-exterior-port.jpg?v=a95be30410',
       // the walk up the drive (Flow, image to video, first frame = the still; played once, never looped, encoded without sound: the walk's own
-      // sound is the game's, audio.js A.gravel / A.screenDoor / the crickets): files in assets/clips/farmhouse/. A file that is not there, or
+      // sound is the game's, audio.js A.approach: no footsteps): files in assets/clips/farmhouse/. A file that is not there, or
       // is slow, gives the push-in still without a word.
       exteriorClip: { land: 'exterior-land.mp4', port: 'exterior-port.mp4' }, thumb: 'assets/places/thumb-farmhouse.jpg?v=8f93fe68ae', plate: 'assets/places/farmhouse-plate.jpg?v=0b7898fa24', plateHi: 'assets/places/farmhouse-plate-2x.jpg?v=e179255f18', board: 'assets/places/farmhouse-board.jpg?v=efcffa0b28' },
     candles: [{ x: 131, y: 76 }, { x: 1368, y: 146 }],

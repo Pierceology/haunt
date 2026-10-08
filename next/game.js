@@ -380,48 +380,55 @@
     return out;
   }
   // <<< safety lists <<<
-  // >>> the house's year >>> (one block: the same text sits in game.js and in the site's backend/goodbye/guard.js; tools/safety/sync-lists.mjs copies it from tools/house/year.js, edit it there)
-  // The house's year. Each house says only what is true in its own year: the Farmhouse is the winter of 1931, the winter
-  // she died, and her world stopped there. The room is tonight (their phones, the real clock); everything SAID in it is 1931.
-  // She knows nothing after it, and their things are strange to her (their phone is her little light).
-  // pastYear(text) is true when a line names a year after the house's, or a name or a thing from after it. A line that
-  // fails it is dropped, never fixed. It leaves everyday words that were true in 1931 alone (FORD, BUSH, JOHNSON, RADIO,
-  // TELEPHONE, JET): the prompts handle those.
-  const HOUSE = { farmhouse: { year: 1931, season: 'winter', president: 'Mr. Hoover' } };
-  const LATE_NAMES = [
-    // presidents after Hoover, and what came with them
-    'TRUMAN', 'EISENHOWER', 'KENNEDY', 'JFK', 'LBJ', 'NIXON', 'WATERGATE', 'CARTER', 'REAGAN', 'CLINTON', 'OBAMA', 'TRUMP', 'BIDEN', 'NEW DEAL',
-    // machines, screens and the net
-    'TV', 'T V', 'TVS', 'TELEVISIONS?', 'INTERNET', 'ONLINE', 'WI ?FI', 'WEBSITES?', 'E ?MAILS?', 'IPHONES?', 'IPADS?', 'ANDROIDS?', 'SMART ?PHONES?',
-    'CELL ?PHONES?', 'MOBILE PHONES?', 'TEXT ME', 'TEXTS', 'TEXTING', 'TIK ?TOK', 'YOU ?TUBE', 'NETFLIX', 'FACEBOOK', 'INSTAGRAM', 'SNAPCHAT', 'TWITTER',
-    'GOOGLE', 'GOOGLED', 'ALEXA', 'SIRI', 'COMPUTERS?', 'LAPTOPS?', 'MICROWAVES?', 'BLUETOOTH', 'GPS', 'EMOJIS?', 'SELFIES?', 'HASHTAGS?', 'PODCASTS?', 'STREAMING',
-    'PLAY ?STATION', 'XBOX', 'NINTENDO', 'VIDEO ?GAMES?', 'CHAT ?GPT', 'CHAT ?BOTS?',
-    // the bomb, the rocket and the moon
-    'ROCKETS?', 'SPACE ?SHIPS?', 'ASTRONAUTS?', 'MOON LANDING', 'SATELLITES?', 'ATOMIC', 'ATOM BOMBS?', 'NUCLEAR', 'HYDROGEN BOMBS?',
-    // what happened after
-    'HITLER', 'NAZIS?', 'WORLD WAR (?:TWO|II|2)', 'WW ?(?:2|II)', 'WWII', 'PEARL HARBOR', 'HIROSHIMA', 'VIETNAM', 'KOREAN WAR', 'COLD WAR', 'COVID', 'CORONAVIRUS',
-    'ELVIS', 'BEATLES', 'ROCK AND ROLL', 'ROCK N ROLL', 'DISNEYLAND', 'MC ?DONALDS', 'WALMART', 'STARBUCKS', 'UBER', 'MARTIN LUTHER KING',
+  // >>> no date >>> (one block: the same text sits in game.js and in the site's backend/goodbye/guard.js; tools/safety/sync-lists.mjs copies it from tools/house/date.js, edit it there)
+  // No date, no era (Pierce, 2026-10-08: "Remove the 1931 and the date"). The house is the poor, peeling house and has no year: nothing said in it gives a
+  // date, a year, a century or a decade, says how old anything is, or names the people and events that would date it. It is a house somebody lives in now,
+  // so the demon may say phone, television, microwave, anything true of a poor house. What it never says is what the player has in front of them: the net,
+  // an app, a brand, a laptop. That would step out of the room.
+  // saysDate(text) is true when a line gives a year (in digits or in words), a century, a decade, an age of the world, or names a president, a war or an
+  // event that would date it. outOfRoom(text) is true when a line names the net, an app, a brand or the player's own device. A line that fails either is
+  // dropped, never fixed. Nothing here knows what year it is, and nothing needs to.
+  const DATED_NAMES = [
+    // presidents, and what came with them
+    // (a surname that is also a first name at some table, CARTER, KENNEDY, REAGAN, TRUMAN, CLINTON, ELVIS, is not here: it would drop a player's own name)
+    'MR HOOVER', 'PRESIDENTS?', 'EISENHOWER', 'JFK', 'LBJ', 'NIXON', 'WATERGATE', 'OBAMA', 'TRUMP', 'BIDEN', 'NEW DEAL',
+    // wars and what happened in them
+    'GREAT DEPRESSION', 'DUST BOWL', 'CIVIL WAR', 'WORLD WAR (?:ONE|TWO|I|II|1|2)', 'WW ?(?:1|2|I|II)', 'WWI', 'WWII', 'HITLER', 'NAZIS?', 'PEARL HARBOR', 'HIROSHIMA',
+    'VIETNAM', 'KOREAN WAR', 'COLD WAR', 'COVID', 'CORONAVIRUS', 'MOON LANDING',
+    'MARTIN LUTHER KING', 'BEATLES', 'ROCK AND ROLL', 'ROCK N ROLL',
   ];
-  const LATE_YEAR_WORDS = [
-    'NINETEEN (?:THIRTY ?(?:TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE)|FORTY|FIFTY|SIXTY|SEVENTY|EIGHTY|NINETY)',
-    'TWO THOUSAND', 'TWENTY (?:TEN|ELEVEN|TWELVE|THIRTEEN|FOURTEEN|FIFTEEN|SIXTEEN|SEVENTEEN|EIGHTEEN|NINETEEN|TWENTY|THIRTY)', 'TWENTY ?FIRST CENTURY',
+  const YEAR_WORDS = [
+    // a year said out loud: NINETEEN THIRTY, TWENTY TWENTY SIX, SEVENTEEN EIGHTY
+    '(?:SEVENTEEN|EIGHTEEN|NINETEEN|TWENTY) (?:HUNDRED|OH|TEN|ELEVEN|TWELVE|THIRTEEN|FOURTEEN|FIFTEEN|SIXTEEN|SEVENTEEN|EIGHTEEN|NINETEEN|TWENTY|THIRTY|FORTY|FIFTY|SIXTY|SEVENTY|EIGHTY|NINETY)',
+    'TWO THOUSAND', 'TWENTY ?FIRST CENTURY',
+    // an age of the world
+    'CENTURY', 'CENTURIES', 'DECADES?', 'MILLENNIUM', 'MILLENNIA', 'ERA', 'TWENTIES', 'THIRTIES', 'FORTIES', 'FIFTIES', 'SIXTIES', 'SEVENTIES', 'EIGHTIES', 'NINETIES',
   ];
-  const LATE = new RegExp('\\b(?:' + LATE_NAMES.concat(LATE_YEAR_WORDS).join('|') + ')S?\\b');
-  function pastYear(text, year) {
-    const y = Number(year) || HOUSE.farmhouse.year;
-    const s = String(text == null ? '' : text).toUpperCase().replace(/['‘’`]/g, '').replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const DATED = new RegExp('\\b(?:' + DATED_NAMES.concat(YEAR_WORDS).join('|') + ')S?\\b');
+  const plainCaps = (text) => String(text == null ? '' : text).toUpperCase().replace(/['‘’`]/g, '').replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  function saysDate(text) {
+    const s = plainCaps(text);
     if (!s) return false;
-    // a year in digits: 1932 and after (1932S too); a bigger number than 2999 is a quantity
-    for (const w of s.split(' ')) { const m = /^([0-9]{4})S?$/.exec(w); if (m && Number(m[1]) > y && Number(m[1]) < 3000) return true; }
-    return LATE.test(s);
+    // a year in digits: any four digits from 1000 to 2999 (1990S too); a bigger number than that is a quantity
+    for (const w of s.split(' ')) { const m = /^([0-9]{4})S?$/.exec(w); if (m && Number(m[1]) >= 1000 && Number(m[1]) < 3000) return true; }
+    return DATED.test(s);
   }
-  // What every writer of her words is told (the night plan, the live spirit, the page's own sampling).
-  function yearBlock(id) {
-    const h = HOUSE[id] || HOUSE.farmhouse;
-    return 'THE YEAR: For you it is the ' + h.season + ' of ' + h.year + ' and always will be. You know nothing that happened after it. If they ask who is president it is ' +
-      h.president + '. If they ask the year it is ' + h.year + '. Their things are strange to you; never name them in their words.';
+  const OUT_OF_ROOM = [
+    // the net and the apps
+    'INTERNET', 'ONLINE', 'WI ?FI', 'WEBSITES?', 'E ?MAILS?', 'EMAIL ME', 'TEXT ME', 'TEXTS', 'TEXTING', 'TIK ?TOK', 'YOU ?TUBE', 'NETFLIX', 'FACEBOOK', 'INSTAGRAM', 'SNAPCHAT', 'TWITTER',
+    'GOOGLE', 'GOOGLED', 'ALEXA', 'SIRI', 'BLUETOOTH', 'GPS', 'EMOJIS?', 'SELFIES?', 'HASHTAGS?', 'PODCASTS?', 'STREAMING', 'PLAY ?STATION', 'XBOX', 'NINTENDO', 'VIDEO ?GAMES?',
+    'CHAT ?GPT', 'CHAT ?BOTS?',
+    // what the player is sitting at (a phone, a television and a microwave are a house's own and are not here)
+    'IPHONES?', 'IPADS?', 'ANDROIDS?', 'SMART ?PHONES?', 'COMPUTERS?', 'LAPTOPS?',
+    // brands
+    'DISNEYLAND', 'MC ?DONALDS', 'WALMART', 'STARBUCKS', 'UBER',
+  ];
+  const OUT = new RegExp('\\b(?:' + OUT_OF_ROOM.join('|') + ')S?\\b');
+  function outOfRoom(text) {
+    const s = plainCaps(text);
+    return !!s && OUT.test(s);
   }
-  // <<< the house's year <<<
+  // <<< no date <<<
   // >>> first names >>> (one block: the same text sits in game.js and in the site's backend/goodbye/guard.js; tools/safety/sync-lists.mjs copies it from tools/house/names.js, edit it there)
   // First names, for a name somebody gives in their own words ("im sam", "my name is jen"): about two thousand common given names,
   // written out (the common US ones, the macOS proper-names file, and the common names of the world's other big communities). It is a
@@ -953,7 +960,7 @@
 
     // the gouges that have gone black are part of the board now (the planchette's glass shows them too)
     drawScratchesBaked(b);
-    // a line along the margin: pencil in Elsie's hand at the Farmhouse
+    // a line along the margin: pencil, in the house's own hand
     const mg = BD.margin;
     if (mg) {
       b.globalCompositeOperation = 'source-over';
@@ -2010,6 +2017,10 @@
   // Rules for all of it: bounded (a long night never fills the board), less of it when FX.low or FX.small, nothing travels with
   // prefers-reduced-motion (the marks still appear), and all of it goes at once with a held candle or any stop (fxReset, called by stopNight and
   // resetScene). The faces are drawn by drawFace as they always were; nothing here touches it or its sets: these are laid over them.
+  // Pierce, 2026-10-08, after playing it: "the scratches and different colors didn't land well. red embers are the best." Both are switched off
+  // here, not removed (one flag each, so a test or a later night can bring them back): no gouges on the board, and the embers, the trail and the
+  // faces' glow stay warm whatever the demon asks. The warm embers, the trail, the burns on the letters and the faces are what he likes.
+  const FXFLAGS = { scratches: false, colours: false };
   const FXE = {
     scratches: [], parts: [], trailAcc: 0, psx: 0, psy: 0, skew: 0, angerUntil: 0, trailed: 0,
     nLong: 0, nShort: 0, lastShort: -Infinity, lastCrack: -Infinity, nStains: 0, nId: 0, nCrack: 0, vx: 0, vy: 0, log: [],
@@ -2052,9 +2063,10 @@
   // The colour of every ember now. The demon's call lasts a couple of minutes (or until it calls another); after that it is warm. The eyes
   // of the faces follow it (evilColour).
   const EMB = { name: 'warm', until: 0 };
-  const emberName = () => (EMB.name !== 'warm' && fxNow() < EMB.until ? EMB.name : 'warm');
+  const emberName = () => (FXFLAGS.colours && EMB.name !== 'warm' && fxNow() < EMB.until ? EMB.name : 'warm');
   function setEmber(name, ms) {
     if (!EMBER_RGB[name] || !fxOK()) return false;
+    if (!FXFLAGS.colours && name !== 'warm') return false;   // red only
     EMB.name = name; EMB.until = fxNow() + (ms || 150000);
     evilColour(name);
     fxLog('ember', { colour: name });
@@ -2063,7 +2075,7 @@
   // the colour a new gouge comes in: the demon's, else (in the house's own phase, after the taking) now and then cold, else warm
   function scratchColour() {
     const e = emberName(); if (e !== 'warm') return e;
-    if (S.haunted && !S.possessing) { const r = Math.random(); return r < 0.34 ? 'green' : r < 0.52 ? 'blue' : 'warm'; }
+    if (FXFLAGS.colours && S.haunted && !S.possessing) { const r = Math.random(); return r < 0.34 ? 'green' : r < 0.52 ? 'blue' : 'warm'; }
     return 'warm';
   }
 
@@ -2177,7 +2189,7 @@
   // a gouge: o.corner/o.dir name a corner and where it runs, or o.from/o.to are board points; o.lines 3 or 4 is a hand's worth of nails;
   // o.colour, o.cool (seconds), o.short (a hostile landing's little scratch), o.quiet (no sound). Returns the scratch, or null.
   function fxScratch(o = {}) {
-    if (!fxOK()) return null;
+    if (!fxOK() || !FXFLAGS.scratches) return null;
     const short = !!o.short, list = FXE.scratches, calm = fxCalm();
     if (short) {
       if (G.t - FXE.lastShort < FXB.shortGap) return null;
@@ -4782,6 +4794,8 @@
   // ---------------------------------------------------------------- the transcript
   const tq = $('#tq'), ta = $('#ta'), tref = $('#tref');
   function showQuestion(q) { tq.textContent = q; tq.classList.remove('plain', 'waiting', 'pencil', 'fading'); ta.classList.remove('fading'); ta.textContent = ''; ta.dataset.len = ''; ta.classList.remove('hint'); if (tref) tref.hidden = true; fitTa(); }
+  // between the pieces of one reply (its lines, a mark it lands on): a wide space, no dot (Pierce, 2026-10-08: "the dots between the words")
+  const SEP = '\u2003';
   function addLetter(ch, cls) {
     if (S.cut && S.unprompted) return document.createElement('span');   // its own line was cut for the dare
     ta.classList.remove('fading');
@@ -4866,6 +4880,9 @@
   //   o.pace, o.dwell: the travel and the rest, when a caller sets them. o.dw: a multiplier on the rests (PACE: slow 1.4).
   //   o.char: every landing chars lightly (the last line of the night). o.fit: the length the transcript line is sized for (the whole
   //   say, when this is one line of it). o.stopAt: a reason to stop between letters.
+  // How fast it spells, in one number. 1 is the first build's motion (measured: 1359 ms a letter, travel plus a rest on the letter).
+  // Pierce, 2026-10-08, after playing it: "it types too slow". 2.6 measures 678 ms a letter: the weight stays, the waiting goes.
+  const SPELL_SPEED = 2.6;
   async function spell(text, o = {}) {
     const t = String(text).toUpperCase().replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
     if (!t) return;
@@ -4877,18 +4894,18 @@
     markSaid(t); NIGHT.spelledLines.push(t);
     const cut = () => S.cut && S.unprompted;
     const hostile = !!o.hostile, fast = !!o.fast, dw = o.dw || 1;
-    const pace = o.pace ?? (fast ? 0.07 : hostile ? 0.45 : 0.95);
-    const base = fast ? 60 : 300;
-    const dwellOf = () => Math.round((o.dwell ?? (fast ? 24 : hostile ? rnd(120, 220) : rnd(380, 700))) * dw);
+    const pace = o.pace ?? (fast ? 0.07 : hostile ? 0.45 : 0.95 / SPELL_SPEED);
+    const base = fast ? 60 : Math.round(300 / SPELL_SPEED);
+    const dwellOf = () => Math.round((o.dwell ?? (fast ? 24 : hostile ? rnd(120, 220) : rnd(380, 700) / SPELL_SPEED)) * dw);
     // about what one letter takes, travel and rest (a hop of 250 units), for how long the faces hold a look
-    const perEst = base + 250 * pace + (fast ? 24 : hostile ? 170 : 540) * dw;
+    const perEst = base + 250 * pace + (fast ? 24 : hostile ? 170 : 540 / SPELL_SPEED) * dw;
     const fit = o.fit ?? t.length;
     ta.dataset.len = fit > 26 ? 'long' : fit > 16 ? 'mid' : '';
     const land = (g) => { commit(g, hostile, fast); if (o.char && !hostile) scorch(g, true); };
     const whole = t.replace(/ /g, '');
     if (whole === 'YES' || whole === 'NO' || whole === 'GOODBYE') {
       const g = GLYPHS[whole];
-      await moveTo(g.x, g.y, { pace, base, dwell: Math.round((o.dwell ?? (fast ? 120 : 1000)) * dw) });
+      await moveTo(g.x, g.y, { pace, base, dwell: Math.round((o.dwell ?? (fast ? 120 : 1000 / SPELL_SPEED)) * dw) });
       if (cut()) return;
       land(g); addLetter(whole === 'GOODBYE' ? 'GOOD BYE' : whole);
       return;
@@ -4987,7 +5004,7 @@
     if (!a || a.length > SAY_TOTAL) return '';
     const lines = splitSay(a);
     if (!lines || !lines.length) return '';
-    if (/\b(AI|CLAUDE|GEMINI|MODEL|BOT|ASSISTANT|LANGUAGE)\b/.test(a) || refused(a) || readsRecord(a) || pastYear(a) || LORE.test(a)) return '';
+    if (/\b(AI|CLAUDE|GEMINI|MODEL|BOT|ASSISTANT|LANGUAGE)\b/.test(a) || refused(a) || readsRecord(a) || saysDate(a) || outOfRoom(a) || LORE.test(a)) return '';
     if (soundsLikeDistress(a)) return '';
     return lines.join(' ');
   }
@@ -5015,16 +5032,18 @@
   const BUZZ = /^\d{1,4}(,\d{1,4}){0,7}$/;
   const SILENCE_MAX = 3000;
   // (the site's REPLY_SCHEMA sfx enum, in its order: every one but none and silence is a recorded take from the arsenal, audio.js A.rec,
-  // most with a synthesized one behind it; the last seven are the demon's own wordless sounds, and a take that has not arrived is silence)
+  // most with a synthesized one behind it; the last six are the demon's own wordless sounds, and a take that has not arrived is silence)
   const SFX = ['none', 'knock', 'knocks', 'steps', 'light', 'near', 'stairs', 'creak', 'door', 'shut', 'chair', 'thud', 'scratch', 'nails', 'drag', 'breath', 'gasp', 'latch', 'rattle', 'floor', 'house', 'glass', 'chime', 'silence',
-    'whisper', 'voices', 'shh', 'hum', 'click', 'tap', 'walls', 'whisper-voice'];   // (whisper-voice: where its own words are heard)
+    'whisper', 'voices', 'shh', 'click', 'tap', 'walls', 'whisper-voice'];   // (whisper-voice: where its own words are heard)
+  // (There is no 'hum': its recordings are switched off, Pierce 2026-10-08, "You've got to remove that." A site that still sends one is
+  // not heard: cleanReply turns a sfx of it into 'none' and drops a sound move of it, because it is not in this list.)
   const SIDES = ['', 'left', 'right', 'behind', 'under', 'above'];
   const intIn = (v, a, b) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? clamp(n, a, b) : a; };
   // the voice's words: capitals and spaces, six words and 48 characters at most, the same checks as a spelled line
   function cleanEar(v) {
     const a = String(v == null ? '' : v).toUpperCase().replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
     if (!a || a.length > EAR_MAX || a.split(' ').length > EAR_WORDS) return '';
-    if (/\b(AI|CLAUDE|GEMINI|MODEL|BOT|ASSISTANT|LANGUAGE)\b/.test(a) || refused(a) || readsRecord(a) || pastYear(a) || LORE.test(a) || soundsLikeDistress(a)) return '';
+    if (/\b(AI|CLAUDE|GEMINI|MODEL|BOT|ASSISTANT|LANGUAGE)\b/.test(a) || refused(a) || readsRecord(a) || saysDate(a) || outOfRoom(a) || LORE.test(a) || soundsLikeDistress(a)) return '';
     return a;
   }
   function cleanReply(r) {
@@ -5158,8 +5177,9 @@
     if (!j || typeof j.notes !== 'string' || !j.notes || typeof j.notes_sig !== 'string' || at < NOTES.at) return;
     NOTES.text = j.notes.slice(0, 600); NOTES.sig = j.notes_sig.slice(0, 100); NOTES.at = at;
   };
-  // (its plans, planSoon below)
-  const PLAN = { on: true, inflight: false, n: 0, max: 40, lastAt: -1 };
+  // (its plans, planSoon below: lastAt is how many replies the night had when the last was asked for; every and taken are how many replies apart
+  // they are asked for before the taking and once it has begun)
+  const PLAN = { on: true, inflight: false, n: 0, max: 40, lastAt: -1, every: 3, taken: 1 };
   // The move a plan made ready: held until the next moment it is due, and dropped the moment anything makes it stale (they send a line,
   // another move happens, the board is taken, the struggle, the night ends).
   const READY = {
@@ -5402,13 +5422,13 @@
       asks: r.asks || 'none', callout: !!r.callout, uses_erased: r.uses_erased || 'none', clip: '', cut: '', buzz: '', blink: false, thrum: '', silence: 0,
       scratch: { corner: '', direction: '' }, ember: '', crack: '', stain: '', burn: '' };
     // the first build's motion for what lands (spell, YES, NO, GOOD BYE, a letter alone): the travel hostile when violent, the rests by PACE
-    const landPace = violent ? 0.45 : 0.95, landBase = 300;
-    const restOf = () => Math.round((violent ? rnd(120, 220) : rnd(380, 700)) * K.dw);
+    const landPace = violent ? 0.45 : 0.95 / SPELL_SPEED, landBase = violent ? 300 : Math.round(300 / SPELL_SPEED);
+    const restOf = () => Math.round((violent ? rnd(120, 220) : rnd(380, 700) / SPELL_SPEED) * K.dw);
     const line = [];   // the line under the board: what it spelled and what it landed on, a run of single marks as one word
     let word = '', pieces = 0, glue = false, glued = false;
     // a run of letters right after the spelled line, with only sounds between, is one line with it (the line, the breath, then the
     // word landed letter by letter): a space, not the dot between pieces
-    const piece = async () => { if (pieces++) { if (glue) addLetter(' '); else { await wait(120); addLetter(' · '); } } glued = glue; glue = false; };
+    const piece = async () => { if (pieces++) { if (glue) addLetter(' '); else { await wait(120); addLetter(SEP); } } glued = glue; glue = false; };
     const endWord = () => { if (word) { if (glued && line.length) line[line.length - 1] += ' ' + word; else line.push(word); word = ''; glued = false; } };
     const live = () => { checkHalt(g0); if (night !== nightNo) throw HALTED; };
     // they sent a line while it was making a move of its own: it stops where it is and answers them (S.cut)
@@ -5417,6 +5437,7 @@
       clip: r.clip || '', cut: r.cut || '', buzz: r.buzz || '', blink: !!r.blink, thrum: r.thrum || '', silence: r.silence || 0,
       scratch: r.scratch && r.scratch.corner ? r.scratch.corner + '>' + r.scratch.direction : '', ember: r.ember || '', crack: r.crack || '', stain: r.stain || '', burn: r.burn || '' });
     dropPath(); P.mode = 'free'; P.tx = P.x; P.ty = P.y; trollStop();
+    noteCandleNamed(r.say);
     // the one behind them: a step closer with this reply, before any of its sounds (never two in a row, never back: the site holds it)
     if (r.closer && NIGHT.behind < 3 && !(NIGHT.turns.length && NIGHT.turns[NIGHT.turns.length - 1].r && NIGHT.turns[NIGHT.turns.length - 1].r.closer)) {
       NIGHT.behind++; NIGHT.behindStep = 0; done.closer = true; nlog('closer', { behind: NIGHT.behind });
@@ -5485,7 +5506,7 @@
           // up to three lines of eighteen, each at the old weight, a breath between them (the transcript line is the whole say)
           const says = splitSay(say) || [];
           for (let k = 0; k < says.length; k++) {
-            if (k) { await wait(rnd(500, 800)); live(); if (cutNow()) break; addLetter(' · '); }
+            if (k) { await wait(rnd(500, 800)); live(); if (cutNow()) break; addLetter(SEP); }
             // (o.char: the last line of the night chars the board as it lands)
             await spell(says[k], { hostile: violent, dw: K.dw, nameUse: true, fit: say.length, char: !!o.char && k === says.length - 1 });
           }
@@ -5639,7 +5660,7 @@
   // is heard ('' where it belongs). 'silence' is the wall clock stopping for a few seconds. Each of the others is one recorded take
   // (A.rec: kind, where it is heard from, how loud), and when there is no recording of it the nearest synthesized sound plays:
   // knocks > A.knock(3), nails > the claw, drag > the floor taking weight, light and thud > footsteps overhead, rattle > the latch,
-  // and a door, a chair, the glass, the chime, the stairs > a creak. The one behind them (breath, gasp, near, hum) comes from where it
+  // and a door, a chair, the glass, the chime, the stairs > a creak. The one behind them (breath, gasp, near) comes from where it
   // stands tonight (NIGHT.behind: across the room, by the door, an arm's length, at their ear), a little closer each time it is heard
   // there (A.behind); with no recording, a breath or a gasp is the synthesized breath at one ear. The demon's own wordless sounds are
   // at the ear (whisper, shh, click), under the floor (voices), on the glass in their hand (tap) and in the wall (walls); a take of
@@ -5662,7 +5683,7 @@
     }
   }
   const FACE_LOOKS = { under: ['knocks', 'scratch', 'nails', 'floor', 'latch', 'rattle', 'drag', 'voices', 'stairs'], above: ['steps', 'light', 'thud'],
-    behind: ['breath', 'gasp', 'near', 'hum', 'silence'], ear: ['whisper', 'shh', 'click'] };
+    behind: ['breath', 'gasp', 'near', 'silence'], ear: ['whisper', 'shh', 'click'] };
   function playSfx(k, side) {
     if (halt) return;
     const sd = EARS.includes(side) ? side : pick(['left', 'right']);
@@ -5706,7 +5727,6 @@
       case 'drag': if (!rec('drag', 'under', 0.9)) A.floorLoad(4); break;
       case 'breath': if (!behind('breath', 0.7)) A.breath(sd); famGust(sd === 'left' ? 1 : -1); break;
       case 'gasp': if (!behind('gasp', 0.8)) A.breath(sd); famGust(sd === 'left' ? 1 : -1); break;
-      case 'hum': behind('hum', 0.7); break;
       case 'latch': if (!where || !rec('latch', where, 0.8)) A.latch(); break;
       case 'rattle': if (!rec('rattle', 'under', 0.8)) A.latch(); break;
       case 'floor': if (!where || !rec('floor', where, 0.8)) A.floorLoad(4); break;
@@ -5789,6 +5809,18 @@
   function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
   const looksLeft = (k) => (NIGHT.looks[k] || []).length;
   // the next look for this event; prefer one of `want` if it is still in the set. Undefined when the set is spent.
+  // A candle it names ("SAY IT TO THE LEFT CANDLE") is the candle that goes out next, so what it sets up is what it pays off. Pierce, 2026-10-08,
+  // after the demon said left and the right one died: "opposite candle went out". Left is the candle on the left of the screen (index 0).
+  function noteCandleNamed(text) {
+    const t = String(text || '').toUpperCase().replace(/\s+/g, ' ');
+    const l = /\bLEFT\b[^.]{0,40}\bCANDLE\b|\bCANDLE\b[^.]{0,40}\bLEFT\b/.test(t), r = /\bRIGHT\b[^.]{0,40}\bCANDLE\b|\bCANDLE\b[^.]{0,40}\bRIGHT\b/.test(t);
+    if (l !== r) { NIGHT.candleNamed = { side: l ? 0 : 1, t: G.t }; nlog('candleNamed', { side: l ? 'left' : 'right' }); }
+  }
+  function candleWanted() {
+    const n = NIGHT.candleNamed; if (!n) return undefined;
+    NIGHT.candleNamed = null;
+    return G.t - n.t < 150000 ? n.side : undefined;   // only for a couple of minutes: after that the room has moved on
+  }
   function takeLook(k, want) {
     const l = NIGHT.looks[k]; if (!l || !l.length) return undefined;
     const i = want != null && l.indexOf(want) >= 0 ? l.indexOf(want) : 0;
@@ -5841,7 +5873,7 @@
   // heard through the house, as before.
   const VOICE_FX = { child: { rate: 1, cut: 7500 }, whisper: {}, low: {} };
   // The ghost's whispers take its place's voice (places.js spirit.whisperStyle). Only the Farmhouse names one, 'child':
-  // the girl is Elsie and is heard nowhere else. 'low' is the thing's voice in every place and does not go through this.
+  // that voice is heard nowhere else. 'low' is the thing's voice in every place and does not go through this.
   const ghostStyle = () => (PL && PL.spirit && PL.spirit.whisperStyle) || 'whisper';
   // o.local: without the site, the computer's own whisper voice may say it (only the name event asks for that)
   async function whisper(text, style, maxWait, o = {}) {
@@ -5910,7 +5942,7 @@
     // a line the board spelled or the voice said tonight (the last twelve are kept, short), so the next night never says it again
     line(t) {
       const x = normLine(t);
-      if (!this.cur || this.cur.skip || x.length < 2 || x.length > 24 || FREE_WORDS.has(x) || troubled(x) || pastYear(x) || sayHasName(x)) return;
+      if (!this.cur || this.cur.skip || x.length < 2 || x.length > 24 || FREE_WORDS.has(x) || troubled(x) || sayHasName(x)) return;
       const l = this.cur.lines || (this.cur.lines = []);
       const i = l.indexOf(x); if (i >= 0) l.splice(i, 1);
       l.push(x); if (l.length > 12) l.shift();
@@ -5924,23 +5956,21 @@
       const parts = [];
       // the last two visits that hold something: a match struck and nothing asked says nothing about them
       const kept = this.past.filter((v) => !v.skip && ((v.qa && v.qa.length) || (v.lines && v.lines.length) || v.lost || (v.ended && v.ended !== LEFT)));
-      // nothing from after her year goes back to a model: an answer like NIXON, a question that names a later thing, a year
-      const fine = (x) => !pastYear(x.q) && !pastYear(x.a);
       // what it spelled on the nights before (the last twelve lines, newest night first, short): it never spells any of them again. They
       // go first, so the 600 characters always keep them.
       const lines = [];
       for (const v of kept.slice().reverse()) for (const x of (v.lines || []).slice().reverse()) {
-        if (typeof x === 'string' && !troubled(x) && !pastYear(x) && !lines.includes(x) && lines.length < 12) lines.push(x);
+        if (typeof x === 'string' && !troubled(x) && !lines.includes(x) && lines.length < 12) lines.push(x);
       }
       if (lines.length) parts.push('It spelled before, at this table: ' + lines.reverse().map((x) => `"${x}"`).join('; ') + '.');
       for (const v of kept.slice(-2).reverse()) {
         const ms = Date.now() - Date.parse(v.date), days = Math.max(0, Math.round(ms / 86400000)), hours = ms / 3600000;
         const when = !isFinite(days) ? 'Before' : hours < 1 ? 'Less than an hour ago' : hours < 6 ? 'A few hours ago' : days === 0 ? 'Earlier today' : days === 1 ? 'Yesterday' : days + ' days ago';
-        const qs = (v.qa || []).filter((x) => !troubled(x.q) && fine(x)).filter((x) => x.t).slice(-3).concat((v.qa || []).filter((x) => !troubled(x.q) && fine(x)).filter((x) => !x.t).slice(-1)).slice(0, 3)
+        const qs = (v.qa || []).filter((x) => !troubled(x.q)).filter((x) => x.t).slice(-3).concat((v.qa || []).filter((x) => !troubled(x.q)).filter((x) => !x.t).slice(-1)).slice(0, 3)
           .map((x) => `"${x.q}" (${x.a})`).join('; ');
         // the house remembers: they let go of GOOD BYE before it was done, and it kept them (and moved the planchette for the next visit)
         const lost = v.lost && /^[A-Z]$/.test(v.lost.letter || '') ? ` They let go of GOOD BYE before it was done, and you kept them; you left the planchette on ${v.lost.letter} for them to find.` : '';
-        parts.push(`${when}: someone at the table.${qs ? ' Asked ' + qs + '.' : ''}${lost} ${v.ended && !pastYear(v.ended) ? 'It ended: ' + v.ended + '.' : ''}`.trim());
+        parts.push(`${when}: someone at the table.${qs ? ' Asked ' + qs + '.' : ''}${lost} ${v.ended ? 'It ended: ' + v.ended + '.' : ''}`.trim());
       }
       let s = parts.join(' ');
       if (s.length > 600) s = s.slice(0, 597).replace(/\s+\S*$/, '') + '...';
@@ -5956,7 +5986,7 @@
     word() {
       for (const v of this.past.slice().reverse()) {
         if (v.skip) continue;
-        const ws = (v.qa || []).filter((x) => x.t && !pastYear(x.q) && !pastYear(x.a)).flatMap((x) => String(x.q).toUpperCase().replace(/[^A-Z ]/g, ' ').split(/\s+/))
+        const ws = (v.qa || []).filter((x) => x.t).flatMap((x) => String(x.q).toUpperCase().replace(/[^A-Z ]/g, ' ').split(/\s+/))
           .filter((w) => w.length >= 4 && w.length <= 12 && !STOP.has(w) && !DEMONIC.test(w));
         if (ws.length) return ws.sort((a, b) => b.length - a.length)[0];
       }
@@ -6058,7 +6088,7 @@
   // catches, on film (the flame family's ignite), or as the engine's own flame does without the family.
   // outMs: how long it stays out. The opening's (2:10) stays out forty seconds and then relights itself: nobody struck a match, nobody's hand.
   async function blowout(outMs) {
-    const i = takeLook('blowout'); if (i == null || G.candleOutT[i] >= 1) return;
+    const i = takeLook('blowout', candleWanted()); if (i == null || G.candleOutT[i] >= 1) return;
     noteHouse('blowout');
     const ghost = looksLeft('blowout') > 0 && !outMs;   // the first one, when it is not the opening's (that one lights itself)
     if (i === 0) clipsAhead(['blowoutL', 'relightGhost'], true);
@@ -6679,7 +6709,7 @@
   // A name somebody gives in their own words (nobody is asked: there is no names card):
   //   im sam, i'm sam, i am sam, my name is jen, my name's jen, this is jen, it's me maya, call me maya, sam here, sam: are you there.
   // After WHO SAID THAT the next typed line is the reply, and a bare first name counts too. The word must be a first name from the
-  // shared list (isFirstName), and never ELSIE, a family word or a demon's name. ask() reads this only after the safety checks, and
+  // shared list (isFirstName), and never a family word or a demon's name. ask() reads this only after the safety checks, and
   // never from a wish to stop, a question for family or the forbidden question: a name is never taken from a line that read as
   // distress, fear or grief.
   const NAME_LEAD = [
@@ -6696,7 +6726,7 @@
     if (asReply) { const m = /^(?:(?:its|it is|im|i am|me|this is|my name is)\s+)?([a-z]{2,12})$/.exec(t); if (m) cands.push(m[1]); }
     for (const w of cands) {
       const n = w.toUpperCase();
-      if (isFirstName(n) && n !== 'ELSIE' && !DEMONIC.test(w) && !KIN.test(w)) return n;
+      if (isFirstName(n) && !DEMONIC.test(w) && !KIN.test(w)) return n;
     }
     return '';
   }
@@ -7326,16 +7356,22 @@
     if (OWN.cancel) OWN.cancel(); else S.cut = true;
     nlog('giveWay', { waiting: !OWN.cancel });
   }
-  // ---- it thinks while they type (Pierce, 2026-10-04): after each reply the page asks the site, in the background, for one plan (mode
+  // ---- it thinks while they type (Pierce, 2026-10-04): after a reply the page asks the site, in the background, for one plan (mode
   // 'plan'): the night re-read at a higher effort. What comes back is its notes on them (kept to hand back with the next move) and, now
   // and then, one move made ready ("next", signed by the site) for the next moment they go quiet or stop in the middle of a line, so that
   // move happens at once (performReady). Nothing ever waits on a plan: if their next line arrives first, the next move simply carries
-  // whatever notes are newest. One in flight at most; twenty a night (the site's cap too); never in the possession or the struggle, never
+  // whatever notes are newest. One in flight at most; forty a night (the site's cap too); never in the possession or the struggle, never
   // once the night has turned to fear or trouble; a lane night told to make none makes none; a site that has them off (410) gets no more.
+  // How often (2026-10-08, Pierce: "it's such a shame this costs constant money"): a plan re-reads the whole night with thinking and costs
+  // more than the moves around it, and it used to be asked for after every reply. Now it is asked for at the first reply, then every third
+  // reply, and after every reply once the taking has begun (PLAN.every, PLAN.taken). A move never needs one: a plan that is skipped
+  // leaves its notes a few moves old (the ledger that goes with every move is always the newest) and the quiet moment it would have made
+  // ready is met by a live move (ownMove). The notes and the moves it makes ready keep the site's signature exactly as before.
   function planSoon() {
     if (!PLAN.on || PLAN.inflight || NET.moveOut || !apiBase() || NIGHT.dead || !NIGHT.id) return;
     const replies = NIGHT.turns.filter((t) => t.r).length;
     if (replies < 1 || PLAN.n >= PLAN.max || replies - PLAN.lastAt < 1) return;
+    if (PLAN.lastAt >= 0 && replies - PLAN.lastAt < (S.haunted || S.possessing ? PLAN.taken : PLAN.every)) return;
     if (S.possessing || S.struggling || S.soft || S.stopping || S.ending || halt) return;
     PLAN.inflight = true; PLAN.n++; PLAN.lastAt = replies;
     const night = nightNo, at = NIGHT.turns.length;
@@ -7414,7 +7450,7 @@
     MEM.end('it left on its own');
     const gb = GLYPHS.GOODBYE;
     P.slack = true; P.dragging = false;
-    if (Math.hypot(P.x - gb.x, P.y - gb.y) > 60) { await moveTo(gb.x, gb.y, { pace: 1.2, dwell: 900 }); commit(gb); addLetter(' · '); addLetter('GOOD BYE'); }
+    if (Math.hypot(P.x - gb.x, P.y - gb.y) > 60) { await moveTo(gb.x, gb.y, { pace: 1.2, dwell: 900 }); commit(gb); addLetter(SEP); addLetter('GOOD BYE'); }
     gb.glow = 1;
     await wait(1800);
     await endingTail({ small: true, knocks: 3 });
@@ -7695,7 +7731,7 @@
       P.heavy = 1;
       // (it lands on YES by 12.4 s whatever a slow phone's frames did to the hold: the room's layers are timed to it)
       try { await animate(clamp(12400 - (G.t - T0), 1500, 2500), (k) => { P.x = lerp(x0, yes.x, k) + rnd(-1.2, 1.2); P.y = lerp(y0, yes.y, k) + rnd(-1.2, 1.2) + Math.sin(k * Math.PI) * 6; }, heavy); } finally { P.heavy = 0; }
-      commit(yes, true); addLetter(' · '); addLetter('YES');   // (commit chars YES)
+      commit(yes, true); addLetter(SEP); addLetter('YES');   // (commit chars YES)
       await animate(Math.max(300, 15000 - (G.t - T0)), (k) => { P.x = yes.x + rnd(-1.5, 1.5); P.y = yes.y + rnd(-1.5, 1.5); }, (t) => t);
     }
     // 15 s: the board itself slides an inch down the table toward whoever is holding the phone, and stays there (DIRECTION.md 7; the
@@ -7901,7 +7937,7 @@
     nlog('wonLanded', { why });
     // (GOOD BYE is on the line already: its words follow it after a dot, the way one move's pieces do)
     const res = await pre.p;
-    if (res && res.reply && res.reply.say && ta.textContent.trim()) addLetter(' · ');
+    if (res && res.reply && res.reply.say && ta.textContent.trim()) addLetter(SEP);
     return liveTurn('', { why, pre, held, holdVoice: true, holdEdit: true, allowName: true, stay: true, char: !!o.char, wordless: true });
   }
   async function untilBlack() { for (let i = 0; i < 30 && G.black < 0.95; i++) await wait(50); }
@@ -8646,8 +8682,9 @@
   }
 
   // The exterior first: where you are, before you sit down. Held eight seconds, pushed in slowly (the still goes from 1.00 to 1.12 with
-  // a 2% rise, ease in and out: see #establish in index.html), with no caption and its own sound: gravel under a slow walk getting
-  // closer, wind in the dry grass, crickets, and one tap of a screen door about five seconds in. A tap (or a key) skips it, but only
+  // a 2% rise, ease in and out: see #establish in index.html), with no caption and its own sound, and no footsteps: wind in the dry grass and
+  // crickets thinning as the house nears, a screen door tapping in the wind, a porch bulb, a television inside, one board, then a held second
+  // (audio.js A.approach). A tap (or a key) skips it, but only
   // after four seconds. Then one second to black, and the match in the dark. When its own film is in assets/clips/farmhouse
   // (places.js art.exteriorClip), the film plays instead of the push-in: it starts on this still (so nothing jumps), has its own
   // sound, plays once and holds its last frame, and is never looped. A missing or slow file is the push-in, without a word.
@@ -8683,15 +8720,16 @@
     const film = !!(vid && vid.getAttribute('src'));
     el.hidden = false; el.classList.remove('out', 'clip'); void el.offsetWidth; el.classList.add('in');
     const t0 = performance.now();
-    let over = false, rolling = false;
-    const synth = () => { if (!over) { A.gravel(8); setTimeout(() => { if (!over) A.screenDoor(); }, 5000); } };
-    // the film has no sound of its own (it is encoded without any): the walk's sound is the game's, with the film and without it
+    let rolling = false;
+    // the film has no sound of its own (it is encoded without any): the way up the drive is the game's, with the film and without it. No footsteps
+    // (Pierce, 2026-10-08, again: "slow walk in without hearing walking, but all the sounds"): the wind, the crickets thinning, the screen door,
+    // the porch bulb, a television inside, one board, and a held second (audio.js A.approach)
     A.outside(true, true);
-    synth();
+    if (A.approach) A.approach(EST.hold / 1000);
     return new Promise((res) => {
       let done = false, hold = 0;
       const finish = () => {
-        if (done) return; done = true; over = true;
+        if (done) return; done = true;
         clearTimeout(hold);
         el.removeEventListener('click', tap); removeEventListener('keydown', tap);
         A.outside(false);
@@ -8998,7 +9036,7 @@
   titleMatch();
   if (/[?&]debug\b/.test(location.search)) {
     window.GOODBYE = {
-      S, G, P, ask, spell, splitSay, blinkNow, playFilm, cutTo, intercept, houseEvent, travel, PLACES, PROG, IMG,
+      S, G, P, ask, spell, noteCandleNamed, candleWanted, splitSay, blinkNow, playFilm, cutTo, intercept, houseEvent, travel, PLACES, PROG, IMG,
       get place() { return PL; },
       // unlock() opens every place; unlock(id) opens that one (it marks the night before it done)
       unlock(id) {
@@ -9117,7 +9155,7 @@
       // state() is a look at all of it; the rest bring each on (the demon's calls are scratch, ember, crack, stain, burn). skew(ms) pushes the marks' own
       // clock forward (a stain dries in ten minutes), reset() is what a held candle and the title do.
       fx: {
-        state: fxState, scratch: fxScratch, ember: setEmber, crack: fxCrack, stain: fxStain, burn: fxBurn, tears: fxTears, faceCrack: fxFaceCrack, faceScorch: fxFaceScorch, landMark: fxLandMark,
+        FLAGS: FXFLAGS, state: fxState, scratch: fxScratch, ember: setEmber, crack: fxCrack, stain: fxStain, burn: fxBurn, tears: fxTears, faceCrack: fxFaceCrack, faceScorch: fxFaceScorch, landMark: fxLandMark,
         reset: fxReset, emit: fxEmit, heat: heatRGB, anger: fxAnger, level: fxLevel, wetAt: (i, x, y) => (STAINS[i] ? stainWetAt(STAINS[i], x, y, (fxNow() - STAINS[i].t0) / 1000) : 0),
         skew(ms) { if (ms !== undefined) FXE.skew = +ms || 0; return FXE.skew; }, FXB, FXE, EMB, BURN, STAINS, FXP, CRACKABLE, scratchEnd, sootTarget, cleanScratch, SUN, MOON, sootSprite, scorchSprite,
       },
