@@ -15,7 +15,7 @@
       // the walk up the drive (Flow, image to video, first frame = the still; played once, never looped, encoded without sound: the walk's own
       // sound is the game's, audio.js A.approach: no footsteps): files in assets/clips/farmhouse/. A file that is not there, or
       // is slow, gives the push-in still without a word.
-      exteriorClip: { land: 'exterior-land.mp4', port: 'exterior-port.mp4' }, thumb: 'assets/places/thumb-farmhouse.jpg?v=8f93fe68ae', plate: 'assets/places/farmhouse-plate.jpg?v=0b7898fa24', plateHi: 'assets/places/farmhouse-plate-2x.jpg?v=e179255f18', board: 'assets/places/farmhouse-board.jpg?v=efcffa0b28' },
+      exteriorClip: { land: 'exterior-land.mp4', port: 'exterior-port.mp4' }, thumb: 'assets/places/thumb-farmhouse.jpg?v=8f93fe68ae', plate: 'assets/places/farmhouse-plate.jpg?v=faaac2a480', plateHi: 'assets/places/farmhouse-plate-2x.jpg?v=b1a8c042c1', board: 'assets/places/farmhouse-board.jpg?v=efcffa0b28' },
     candles: [{ x: 131, y: 76 }, { x: 1368, y: 146 }],
     // the live flames: wick (x, y), lean of the photographed flame (tilt, radians from up), length, and the spot
     // darkened on the wick. The photographed flames are painted out of the plate files, so hide only chars the wick.
@@ -23,7 +23,13 @@
       { x: 152.3, y: 91.4, tilt: -0.95, len: 76.0, hide: { x: 153.5, y: 92.0, r: 3 } },
       { x: 1353.5, y: 158.2, tilt: 0.88, len: 53.0, hide: { x: 1353.5, y: 158.8, r: 3 } },
     ],
-    boardRect: { cx: 807, cy: 433, w: 772, h: 514.7 },
+    // The board lies on the clear wood in the middle (2026-10-08; Pierce: "my board is on top of the plate and that looks wrong"): the largest 3:2
+    // rectangle that covers no prop on the table (the dinner plate and the napkins above it, the mug below, the matches and glasses to the left,
+    // the pen and the keys to the right), with the screen's middle as its own. On the 1376 by 768 plate it is x 406 to 982, y 196 to 578; it is
+    // 86.8% of the old board (772 wide). frameRect is the old board's rectangle: the camera still frames that, so the photo and the candles sit on
+    // the screen exactly where they did (game.js FRAME).
+    boardRect: { cx: 807, cy: 453.5, w: 670, h: 446.7 },
+    frameRect: { cx: 807, cy: 433, w: 772, h: 514.7 },
     // A phone held upright: the same table photographed 9:16 (cropped to 1:2), the candles at the top, the board under them.
     portrait: {
       plate: 'assets/places/farmhouse-plate-port.jpg?v=38aee62eaf',
@@ -161,6 +167,167 @@
       stairs: { still: null, step: null, light: null },
       window: { still: null, breath: null },
     },
+  };
+  // ---------------------------------------------------------------- the table's props and the looks (the wiring of 2026-10-08)
+  // FARMHOUSE.props: one entry per thing on the table that can misbehave (DIRECTION.md 13.2), by the name the demon calls it (game.js PROPS). Every
+  // number is on the 1376 by 768 plate (plate-v4). game.js propPlay plays it; the props package (game.js) says how.
+  //   A film (a region clip, Flow, SHOTLIST.md A3; files in assets/clips/farmhouse/props/):
+  //     clip: the take (1920 by 1080, first frame the table), from/to: the seconds of it that are played (the take's dead time and its flaws cut off),
+  //     ease: it slows to a stop at `to` instead of stopping dead (a take cut while the thing is still moving).
+  //     reg: [sx, tx, sy, ty]: where a plate pixel is in the take (clip x = plate x * sx + tx; y likewise): measured by matching the take's first
+  //       frame to the plate it was made against (SIFT, 150 to 280 points, under a pixel of error). It is not a plain scale: the take sits 4.5 px
+  //       down. The four takes made against the earlier plate (napkins, matches, match-strike, moth fly) register the same way.
+  //     tone: [r, g, b]: what the take is multiplied by to match the plate (the takes come out a little blue and a little bright).
+  //     key: the plate after it, pixel for pixel, as a PNG whose alpha is the soft region the take is drawn through (the motion it covers, dilated,
+  //       with about 14 plate px of feather); box: that PNG's rectangle on the plate. The take is drawn through the same alpha, so no seam shows,
+  //       and the key stays for the rest of the night. chg/chgBox: the part of the key that differs from the plate (the thing itself, moved),
+  //       drawn over any later prop's region so a later film never puts back what this one moved.
+  //     sound: { kind, at } a manifest kind (assets/sfx/farmhouse/manifest.json) and the second of the played part it starts on; pos: where
+  //       on the plate it is heard from.
+  //   Code (no film): the flies, the phone, the remote. made: a take exists and is not played tonight; the words say why.
+  const PROP_DIR = 'props/';
+  FARMHOUSE.props = {
+    // a breath lifts the top napkin and sets it down, and the next slides half out and stays (T-NAPKINS, made against the earlier plate: the
+    // envelope that plate had below the holder is cut out of the region, so it never shows). Played to 3.0 s, where it is half out; easing.
+    napkins: { clip: PROP_DIR + 'T-NAPKINS.mp4', from: 1.4, to: 3.0, ease: true, reg: [1.39522, 0.2, 1.39384, 4.83], tone: [0.99, 0.986, 0.929],
+      key: PROP_DIR + 'K-NAPKINS.png', box: [713, 0, 971, 235], chg: PROP_DIR + 'K-NAPKINS-CHG.png', chgBox: [722, 12, 961, 227],
+      sound: { kind: 'napkin', at: 0.45 }, pos: [840, 120] },
+    // the fork turns on the plate with a small scrape and stops, its handle over the rim (T-FORK; key K-FORK-MOVED)
+    fork: { clip: PROP_DIR + 'T-FORK.mp4', from: 1.4, to: 5.83, reg: [1.39553, -0.1, 1.39447, 4.71], tone: [0.978, 0.98, 0.904],
+      key: PROP_DIR + 'K-FORK.png', box: [322, 21, 598, 252], chg: PROP_DIR + 'K-FORK-CHG.png', chgBox: [332, 28, 542, 223],
+      sound: { kind: 'fork-scrape', at: 0.5 }, pos: [440, 110] },
+    // the ring of keys slides toward the middle with a jingle (T-KEYS; key K-KEYS-MOVED)
+    keys: { clip: PROP_DIR + 'T-KEYS.mp4', from: 0.7, to: 3.25, reg: [1.39538, -0.06, 1.39505, 4.49], tone: [0.993, 0.998, 0.911],
+      key: PROP_DIR + 'K-KEYS.png', box: [899, 488, 1212, 700], chg: PROP_DIR + 'K-KEYS-CHG.png', chgBox: [908, 488, 1207, 693],
+      sound: { kind: 'keys', at: 0.45 }, pos: [1100, 610] },
+    // the cold mug turns on the planks until its handle points at the player (T-MUG-TURN; key K-MUG-TURNED)
+    mug: { clip: PROP_DIR + 'T-MUG-TURN.mp4', from: 0.08, to: 3.92, reg: [1.3955, -0.07, 1.39512, 4.45], tone: [0.996, 0.998, 0.875],
+      key: PROP_DIR + 'K-MUG.png', box: [240, 501, 500, 768], chg: PROP_DIR + 'K-MUG-CHG.png', chgBox: [264, 563, 480, 768],
+      sound: { kind: 'mug-turn', at: 0.3 }, pos: [370, 660] },
+    // one arm of the folded glasses opens, then the other, as if put on a face that is not there (T-GLASSES-OPEN; key K-GLASSES-OPEN)
+    glasses: { clip: PROP_DIR + 'T-GLASSES-OPEN.mp4', from: 0.5, to: 3.67, reg: [1.39525, 0.18, 1.39505, 4.42], tone: [1, 0.999, 0.948],
+      key: PROP_DIR + 'K-GLASSES.png', box: [0, 400, 377, 733], chg: PROP_DIR + 'K-GLASSES-CHG.png', chgBox: [95, 420, 357, 701],
+      sound: { kind: 'glasses-open', at: 0.4 }, pos: [180, 570] },
+    // the glass tips over with nothing touching it and rolls toward the board, cracked down its side (T-GLASS-BREAK, 0.75 to 3.0 s, easing to a
+    // stop: after 3.0 the take rolls it back and grows a second glass where the first stood, so K-GLASS-BROKEN, which has that second glass, is
+    // not used; the key is the take's own frame at 3.0). The crack, then the break as it lands; the picture jumps 4 px (shake 'glass-break'); the
+    // water reaches the board and soaks along its grain (the marks' stain, from the glass's side; it dries from the edges over ten minutes).
+    glass: { clip: PROP_DIR + 'T-GLASS-BREAK.mp4', from: 0.75, to: 3.0, ease: true, reg: [1.39477, 0.13, 1.39493, 4.57], tone: [0.988, 0.987, 0.922],
+      key: PROP_DIR + 'K-GLASS.png', box: [959, 195, 1376, 486], chg: PROP_DIR + 'K-GLASS-CHG.png', chgBox: [968, 195, 1376, 486],
+      sound: { kind: 'glass-crack', at: 0.35 }, sound2: { kind: 'glass-break', at: 1.05, shake: 'glass-break' }, pos: [1300, 235],
+      water: { x: 1336, y: 233, rx: 30, ry: 34 }, stain: { place: 'glass', at: 1.6 } },
+    // the moth: it wakes, spreads its wings and turns (M-WAKE, 6.58 to 7.92 s; key K-MOTH-WINGS), then lifts and goes (M-FLY, 0.58 to 1.42 s,
+    // made against the earlier plate; key K-NOMOTH; the take's own flight crosses where that plate had envelopes, so the region stops short of
+    // them and the engine takes the moth to the lens itself). After it the moth is gone for the night.
+    'moth-wake': { clip: PROP_DIR + 'M-WAKE.mp4', from: 6.58, to: 7.92, reg: [1.39541, -0.01, 1.39377, 5.05], tone: [0.941, 0.923, 0.866],
+      key: PROP_DIR + 'K-MOTH-WAKE.png', box: [1161, 270, 1329, 392], chg: PROP_DIR + 'K-MOTH-WAKE-CHG.png', chgBox: [1171, 278, 1323, 377], pos: [1250, 325] },
+    'moth-fly': { clip: PROP_DIR + 'M-FLY.mp4', from: 0.58, to: 1.42, fadeIn: 120, reg: [1.39512, 0.02, 1.3945, 4.68], tone: [0.98, 0.968, 0.921],
+      key: PROP_DIR + 'K-MOTH-FLY.png', box: [1158, 215, 1336, 420], chg: PROP_DIR + 'K-MOTH-FLY-CHG.png', chgBox: [1197, 279, 1308, 369], pos: [1250, 325] },
+    // code: a dozen flies over the apples, a buzz, and then they leave for the nearer candle (the right) and it gutters
+    apples: { code: 'flies', at: [1292, 480], sound: { kind: 'flies' }, pos: [1318, 500] },
+    // code: the cordless handset's little display lights green and it rings once (the display: four corners on the plate)
+    phone: { code: 'phone', display: [[735, 680], [763, 665], [795, 723], [765, 737]], box: [578, 615, 910, 768], sound: { kind: 'phone-ring' }, pos: [745, 700] },
+    // code: a click, the red power button glows for a second, and a television comes on in the room to the left
+    remote: { code: 'remote', button: [1065, 740, 8], sound: { kind: 'remote-click' }, pos: [1110, 725] },
+    // made, not played tonight:
+    salt: { made: 'T-SALT-TIP has a third, ghostly shaker that flies in and rolls away, and the real one never tips: it jumps to K-SALT-TIPPED in one frame at 7.1 s',
+      clip: PROP_DIR + 'T-SALT-TIP.mp4', from: 0.6, to: 8, reg: [1.39556, -0.14, 1.39476, 4.63], tone: [0.98, 0.98, 0.9], box: [460, 0, 860, 340], sound: { kind: 'salt-tip', at: 6.5 }, pos: [630, 80] },
+    pen: { made: 'T-PEN-ROLL rolls the pen left along the plank straight across the middle of the table, where the board lies, and it vanishes there',
+      clip: PROP_DIR + 'T-PEN-ROLL.mp4', from: 0.6, to: 4, reg: [1.39549, -0.17, 1.39504, 4.39], tone: [0.98, 0.98, 0.9], box: [300, 300, 1300, 600], sound: { kind: 'pen-roll', at: 0.3 }, pos: [1140, 450] },
+    matches: { made: 'T-MATCHES-POINT throws the matches out of their place; they land in a line in the lower middle, half under the board, and K-MATCHES-LINE (three in a row in their own place) is a different picture',
+      clip: PROP_DIR + 'T-MATCHES-POINT.mp4', from: 1.4, to: 8, reg: [1.39538, -0.16, 1.39482, 4.61], tone: [0.98, 0.98, 0.9], box: [40, 280, 760, 690], sound: { kind: 'matches-roll', at: 0.5 }, pos: [170, 390] },
+    'match-strike': { made: 'T-MATCH-STRIKE strikes the match in the line T-MATCHES-POINT leaves in the lower middle, which is not on this table',
+      clip: PROP_DIR + 'T-MATCH-STRIKE.mp4', from: 0, to: 8, reg: [1.39555, -0.1, 1.39537, 4.46], tone: [0.98, 0.98, 0.9], box: [480, 500, 760, 690], pos: [560, 600] },
+  };
+  // FARMHOUSE.looks: the camera turns (12, 13.3, 13.12) and the cutaways (4), by the name the demon calls them (game.js LOOKS):
+  //   The looks package (2026-10-08), every file in assets/clips/farmhouse/looks/, every time in seconds of that file, every point in its own
+  //   1920 by 1080 pixels. Only file names are strings here (tools/build-pages.sh copies every string it finds under looks).
+  //   A room: in (the turn off the table: from, to), join (seconds of dissolve from the turn's last frame onto the room's still; 0 where the
+  //   turn lands on it), still (the room's locked frame: a file and the time of it), the room's own hold clips and quads, out (the turn back).
+  //   The transits are Flow's second round (rooms-v4, 2026-10-08), made from the new plate (plate-v4: no envelopes, the small plate, the pen); the
+  //   first round's started and ended on the old one. Every transit is still cut at the turn: Flow invents a wider, candlelit table with chairs
+  //   in the middle of each (the table pulled back from, a doorway onto it), and the table it starts or ends on has no board on it. So an IN
+  //   starts after that table has left the frame and an OUT ends before it comes; the engine carries the live table (with the board) into the
+  //   turn and out of it, sliding the way the head turns, over about 400 ms (game.js, the looks). Each IN now ends on its room's still: join is
+  //   the dissolve onto the held still (0.5 s where Flow's last frame sits 9 to 12 px off it: the microwave, the abacus, the hall).
+  //   A cutaway: cut, a list of { src, from, to } played back to back, hard cut in on the first frame and hard cut out on the last; a segment
+  //   with hold is that one frame held that many seconds (the door that does not move).
+  FARMHOUSE.looks = {
+    // the dining room, to the right. IN: from 3.55 (the pulled-back table gone, the bare corner) to K-CLOCK, which it ends on (5.96). still:
+    // T-CAT-SWING at 0.1, eyes and tail dead centre (measured: tail x 1305 at 0.02 to 0.27 and 1.98 to 2.02). face: the dial (centre x, y,
+    // radius; the pivot dot). OUT: K-CLOCK to 2.5; the peeling table comes up from 2.8.
+    clock: {
+      in: { src: 'looks/L-CLOCK-IN.mp4', from: 3.55, to: 5.96 }, join: 0.2,
+      still: { src: 'looks/T-CAT-SWING.mp4', at: 0.1 },
+      hold: { src: 'looks/T-CAT-SWING.mp4', from: 0.1, centre: [0.1, 2.0] },
+      face: [1305, 392, 86],
+      out: { src: 'looks/L-CLOCK-OUT.mp4', from: 0.02, to: 2.5 },
+    },
+    // further right, the kitchen doorway. IN: from 3.15 (the blur past the room) to the microwave. still: L-MICRO-OUT's first frame (K-MICRO).
+    // display: its four corners (top left, top right, bottom right, bottom left), inside the bezel. OUT: to 3.3, before the chairs.
+    micro: {
+      in: { src: 'looks/L-MICRO-IN.mp4', from: 3.15, to: 5.96 }, join: 0.5,
+      still: { src: 'looks/L-MICRO-OUT.mp4', at: 0.02 },
+      display: [[1126, 451], [1164, 455], [1163, 471], [1126, 467]],
+      out: { src: 'looks/L-MICRO-OUT.mp4', from: 0.02, to: 3.3 },
+    },
+    // diagonal left, the living room. IN: from 3.35 (the rug, the table's corner leaving). hold: TV-BROADCAST, the test pattern from 1.06 and
+    // the empty studio with one armchair from 2.1. tear: TV-ROLL's white flash and blocks into snow, 2.36 to 3.42 (the rest of TV-ROLL is the
+    // set off). screen: the picture's four corners. OUT: to 3.4, before the table slides up into it.
+    tv: {
+      in: { src: 'looks/L-TV-IN.mp4', from: 3.35, to: 5.96 }, join: 0.2,
+      still: { src: 'looks/TV-BROADCAST.mp4', at: 0.02 },
+      hold: { src: 'looks/TV-BROADCAST.mp4', from: 0.02, to: 4.6 },
+      tear: { src: 'looks/TV-ROLL.mp4', from: 2.36, to: 3.42 },
+      screen: [[812, 270], [1112, 268], [1108, 493], [819, 495]],
+      out: { src: 'looks/L-TV-OUT.mp4', from: 0.02, to: 3.4 },
+    },
+    // right and lower, the sideboard. IN: from 3.75 (the pulled-back table gone). bead: one bead across the second rod, 1.72 (at rest) to 3.38
+    // (stopped at the right; at 3.5 Flow snaps it back). rush: every bead flies, 1.9 to 3.5. after: one bead on a lower rod slides across by
+    // itself, 2.1 to 4.4. OUT: to 4.3, the chair beside it going out of focus (the clip's focus pull lands on a table with no board).
+    abacus: {
+      in: { src: 'looks/L-ABACUS-IN.mp4', from: 3.75, to: 5.96 }, join: 0.5,
+      still: { src: 'looks/A-BEAD.mp4', at: 0.02 },
+      bead: { src: 'looks/A-BEAD.mp4', from: 1.72, to: 3.38 },
+      rush: { src: 'looks/A-RUSH.mp4', from: 1.9, to: 3.5 },
+      after: { src: 'looks/A-AFTER.mp4', from: 2.1, to: 4.4 },
+      out: { src: 'looks/L-ABACUS-OUT.mp4', from: 0.02, to: 4.3 },
+    },
+    // left, the hall. IN: from 3.7 (the table at the bottom corner, going) into the hall. OUT: to 3.0, before the table rises into it.
+    hall: {
+      in: { src: 'looks/L-HALL-IN.mp4', from: 3.7, to: 5.96 }, join: 0.5,
+      still: { src: 'looks/L-HALL-OUT.mp4', at: 0.02 },
+      out: { src: 'looks/L-HALL-OUT.mp4', from: 0.02, to: 3.0 },
+    },
+    // up. UP: from 2.3 (the table at the bottom edge), the far wall, its door, the plaster: K-CEIL at 7.95. hold: the bulb swings as if
+    // pushed, three swings, and settles. moon: where its face is in the plaster (centre x, y; drawn at six times the moon's radius on the
+    // board). stain: the water stain the darkening grows from (x, y, radius). DOWN: to 2.4, before the table in the doorway.
+    ceiling: {
+      in: { src: 'looks/L-CEILING-UP.mp4', from: 2.3, to: 7.95 }, join: 0.15,
+      still: { src: 'looks/L-CEIL-LAMP.mp4', at: 0.02 },
+      hold: { src: 'looks/L-CEIL-LAMP.mp4', from: 0.02, to: 5.96 },
+      moon: [560, 330], stain: [800, 400, 260],
+      out: { src: 'looks/L-CEILING-DOWN.mp4', from: 0.02, to: 2.4 },
+    },
+    // the cutaways (DIRECTION.md 4). The hall door: C-HALL-DOOR-AJAR, about an inch (C-HALL-DOOR, round 2, still opens wide: not used). The
+    // front door's knob turns into a lever with the chain hanging off (Flow): only the lever turning, 2.35 to 3.95. The knocks: the door
+    // not moving, C-DOOR-HANDLE's first frame held while three knocks land (C-DOOR-KNOCKS was never made). The bathroom clip drips (1.3 to
+    // 3.0) and then the curtain swings (from 3.9). The mirror's mist is a grey blur that drifts (Flow's), kept short for him to judge.
+    'hallway/door': { cut: [{ src: 'looks/C-HALL-DOOR-AJAR.mp4', from: 0.3, to: 3.9 }] },
+    'hallway/lamp': { cut: [{ src: 'looks/C-HALL-LAMP.mp4', from: 0.6, to: 5.1 }] },
+    'hallway/shadow': { cut: [{ src: 'looks/C-HALL-SHADOW.mp4', from: 0.2, to: 4.6 }] },
+    'door/handle': { cut: [{ src: 'looks/C-DOOR-HANDLE.mp4', from: 2.35, to: 3.95 }] },
+    'door/knocks': { cut: [{ src: 'looks/C-DOOR-HANDLE.mp4', from: 0.1, to: 0.1, hold: 3.6 }] },
+    'door/peephole-2': { cut: [{ src: 'looks/C-PEEP-2.mp4', from: 0.02, to: 3.96 }] },
+    'door/peephole-3': { cut: [{ src: 'looks/C-PEEP-2.mp4', from: 0.02, to: 3.96 }, { src: 'looks/C-PEEP-3.mp4', from: 0.02, to: 3.96 }] },
+    'cellar/latch': { cut: [{ src: 'looks/C-CELLAR-LATCH.mp4', from: 0.8, to: 5.6 }] },
+    'cellar/open': { cut: [{ src: 'looks/C-CELLAR-OPEN.mp4', from: 0.4, to: 4.4 }] },
+    'stairs/step': { cut: [{ src: 'looks/C-STAIR-STEP.mp4', from: 0.8, to: 4.2 }] },
+    'stairs/light': { cut: [{ src: 'looks/C-STAIR-LIGHT.mp4', from: 0.5, to: 3.3 }] },
+    'window/breath': { cut: [{ src: 'looks/C-WINDOW-BREATH.mp4', from: 0.4, to: 5.2 }] },
+    'bathroom/drip': { cut: [{ src: 'looks/C-BATH-DRIP.mp4', from: 0.6, to: 3.5 }] },
+    'bathroom/curtain': { cut: [{ src: 'looks/C-BATH-DRIP.mp4', from: 3.7, to: 5.96 }] },
+    'bathroom/mirror': { cut: [{ src: 'looks/C-BATH-MIRROR.mp4', from: 0.6, to: 3.4 }] },
   };
   // ---------------------------------------------------------------- the flame family (clips.flames; Pierce, 2026-10-02)
   // His Birds of Winthrop technique, one flame at a time. Each wick gets its own <video> of ONE flame, filmed centred on

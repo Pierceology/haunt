@@ -442,7 +442,7 @@
   };
   A.bedState = function () {
     const L = bedLevels();
-    return { h: BED.h, hushed: !!ctx && now() < BED.hushUntil, hushes: BED.hushes, thin: +BED.thin.toFixed(3), settles: BED.settles, loaded: Object.keys(BED.buf), levels: L,
+    return { h: BED.h, noCrickets: BED.noCrickets, hushed: !!ctx && now() < BED.hushUntil, hushes: BED.hushes, thin: +BED.thin.toFixed(3), settles: BED.settles, loaded: Object.keys(BED.buf), levels: L,
       gains: { wind: amb.wind ? amb.wind.gain.value : 0, crickets: amb.crickets ? amb.crickets.gain.value : 0, clock: amb.clock ? amb.clock.gain.value : 0, siding: BED.sidingG ? BED.sidingG.gain.value : 0, low: BED.lowG ? BED.lowG.gain.value : 0 } };
   };
   // the house settling, on its own, more often as the night goes on: never on top of one of the demon's sounds, always in the room's reverb
@@ -594,7 +594,12 @@
   // listed in its manifest.json) is exempt, so it comes on by itself when it arrives. The files stay where they are.
   const BREATH_TAKES_OFF = /^(?:breath-|guttural-breath-|inhale-close-|low-exhale-|teeth-breath-)/, BREATH_DRY_ON = /^breath-(?:nose|ear)-/;
   const isOff = (f) => VOICED_OFF.test(f) || (BREATH_TAKES_OFF.test(f) && !BREATH_DRY_ON.test(f));
-  const takeNames = (m, k) => (Array.isArray(m[k]) ? m[k] : []).filter((f) => typeof f === 'string' && /^[\w.\-]+$/.test(f) && !isOff(f)).slice(0, CAP[k] || CAP_DEFAULT);
+  // A manifest entry is a file name, or { file, gain } for a take recorded very quiet or very loud (2026-10-08, the table's props: the phone's ring
+  // and the television are loud, the napkin and the mug are near silence): the gain multiplies that take wherever it is played, instead of
+  // re-encoding the file. TGAIN holds it per decoded take.
+  const fileOf = (f) => (f && typeof f === 'object' ? f.file : f), TGAIN = new WeakMap();
+  const takeGain = (b) => TGAIN.get(b) || 1;
+  const takeNames = (m, k) => (Array.isArray(m[k]) ? m[k] : []).map(fileOf).filter((f) => typeof f === 'string' && /^[\w.\-]+$/.test(f) && !isOff(f)).slice(0, CAP[k] || CAP_DEFAULT);
   A.wantedTakes = (m) => Object.keys(m || {}).reduce((n, k) => n + takeNames(m, k).length, 0);   // (a test's look: how many takes a manifest asks to have decoded)
   A.usableTakes = (kind) => (usable(kind) || []).map((b) => NAME.get(b) || '');   // (a test's look: the files that may play for this kind)
   const rn = () => Math.random() * 2 - 1;
@@ -651,7 +656,7 @@
   };
   function playTake(buf, node, t, v, rate) {
     const src = ctx.createBufferSource(); src.buffer = buf; if (rate) src.playbackRate.value = rate;
-    const g = ctx.createGain(); g.gain.value = v == null ? 1 : v;
+    const g = ctx.createGain(); g.gain.value = (v == null ? 1 : v) * takeGain(buf);
     src.connect(g); g.connect(node); src.start(t);
     return buf.duration / (rate || 1);
   }
@@ -732,8 +737,9 @@
     try {
       const r = await fetch(dir + 'manifest.json', { cache: 'no-store' }); if (!r.ok) return 0;
       const m = await r.json();
-      const jobs = [];
+      const jobs = [], gains = {};
       for (const k of Object.keys(m || {})) for (const f of takeNames(m, k)) jobs.push([k, f]);
+      for (const k of Object.keys(m || {})) if (Array.isArray(m[k])) for (const e of m[k]) if (e && typeof e === 'object' && +e.gain > 0) gains[e.file] = Math.min(12, +e.gain);
       // (2026-10-05, Pierce: "maybe finding sounds were taking too long") In the order they are needed: the match on the title; the
       // pondering (every move); the first take of each sound the house and the taking use early (a knock, a creak, the floor, the latch,
       // the frame, a breath, the slam, the snuff); then everything else. The early ones go six at a time; the rest two at a time, so the
@@ -754,7 +760,7 @@
               if (ab) delete RAW[dir + f]; else { const rr = await fetch(dir + f); if (!rr.ok) continue; ab = await rr.arrayBuffer(); }
               const b = await A.decode(ab); if (!b) continue;
               if (isOff(f)) OFF.add(b);   // (not reached: such a take is not fetched; so a take that got in some other way still never plays)
-              NAME.set(b, f);
+              NAME.set(b, f); if (gains[f]) TGAIN.set(b, gains[f]);
               (SAMPLES[k] = SAMPLES[k] || []).push(b); n++;
             } catch (e) { /* that one take is skipped */ }
           }
@@ -803,8 +809,8 @@
     const list = usable(kind); if (!list || !list.length) return 0;
     if (where && typeof where === 'object') {
       A.recorded++;
-      const buf = where.take || list[Math.floor(Math.random() * list.length)];
-      const len = playAt(buf, spot(where.x, where.y, where.z, { kind, vol: vol == null ? 0.8 : vol, wet: where.wet, cut: where.cut }), 1, where.rate || rnd(0.98, 1.02), where.keep);
+      const buf = where.take || (where.pick != null ? list[Math.abs(where.pick | 0) % list.length] : list[Math.floor(Math.random() * list.length)]);
+      const len = playAt(buf, spot(where.x, where.y, where.z, { kind, vol: (vol == null ? 0.8 : vol), wet: where.wet, cut: where.cut }), 1, where.rate || rnd(0.98, 1.02), where.keep, where.off, where.dur);
       A.lastTake = { kind, len, hits: hitsOf(buf) };
       return len;
     }
@@ -814,7 +820,7 @@
       : where === 'left' ? panner(-3, 0.6, rnd(-1.5, 0.5))
       : where === 'right' ? panner(3, 0.6, rnd(-1.5, 0.5))
       : panner(0, -0.2, -0.3);
-    const buf = take(kind), len = playTake(buf, p, now(), vol == null ? 0.8 : vol, rnd(0.97, 1.03));
+    const buf = take(kind), len = playTake(buf, p, now(), (vol == null ? 0.8 : vol), rnd(0.97, 1.03));
     A.lastTake = { kind, len, hits: hitsOf(buf) };
     if (where === 'under') lout(p, 0.45); else out(p, where === 'above' ? 0.45 : 0.3);
     return len;
@@ -860,10 +866,22 @@
     if (A.spotLog.length > 200) A.spotLog.shift();
     return input;
   }
-  function playAt(buf, node, vol, rate, keep) {
+  // off, dur: a slice of the take (seconds into it, and how long), faded 8 ms at each end so a slice never clicks (the looks: one tick of the
+  // cat clock, a run of the microwave's keys)
+  function playAt(buf, node, vol, rate, keep, off, dur) {
     const src = ctx.createBufferSource(); src.buffer = buf; if (rate) src.playbackRate.value = rate;
-    const g = ctx.createGain(); g.gain.value = vol == null ? 1 : vol;
-    src.connect(g); g.connect(node); src.start(now());
+    const g = ctx.createGain(); g.gain.value = (vol == null ? 1 : vol) * takeGain(buf);
+    src.connect(g); g.connect(node);
+    const o = Math.max(0, Math.min(buf.duration - 0.02, +off || 0)), d = dur > 0 ? Math.min(+dur, buf.duration - o) : 0;
+    if (o > 0 || d > 0) {
+      const t = now(), v = g.gain.value, len = d || buf.duration - o;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + 0.008);
+      g.gain.setValueAtTime(v, t + Math.max(0.01, len / (rate || 1) - 0.008)); g.gain.linearRampToValueAtTime(0, t + len / (rate || 1));
+      src.start(t, o, len);
+      if (keep) keep({ src, g });
+      return len / (rate || 1);
+    }
+    src.start(now());
     if (keep) keep({ src, g });
     return buf.duration / (rate || 1);
   }
@@ -932,6 +950,31 @@
   A.has = (kind) => { const l = usable(kind); return !!(l && l.length); };
   // How late the headphones play what the page asks for, in seconds (the output's own latency where the browser says; Safari does not): the
   // picture waits this long before it moves with a sound, so a knock is seen when it is heard, not before.
+  // The looks (2026-10-08). A.drip: one drop from a tap into a basin, somewhere in the house ({ x, y, z } as A.rec's): a small rising plink and
+  // the porcelain under it. A.bead: one wooden abacus bead stopping against the next, a hard dry clack, there. Both through spot().
+  A.drip = function (at, vol) {
+    if (!A.ready) return;
+    const t = now(), p = at || { x: -3.4, y: 0.2, z: 3.8 }, node = spot(p.x, p.y, p.z, { kind: 'drip', vol: vol == null ? 0.7 : vol, wet: 0.35 });
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(rnd(900, 1100), t); o.frequency.exponentialRampToValueAtTime(rnd(2100, 2500), t + 0.045);
+    const g = ctx.createGain(); env(g, t, 0.003, 0.5, 0.06);
+    o.connect(g); g.connect(node); o.start(t); o.stop(t + 0.12);
+    const s = noiseSrc(); const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 3200; bp.Q.value = 4;
+    const g2 = ctx.createGain(); env(g2, t, 0.001, 0.12, 0.02);
+    s.connect(bp); bp.connect(g2); g2.connect(node); s.start(t, rnd(0, 1.5), 0.05);
+  };
+  A.bead = function (at, vol) {
+    if (!A.ready) return;
+    const t = now(), p = at || { x: 2.4, y: -0.4, z: -1.6 }, node = spot(p.x, p.y, p.z, { kind: 'bead', vol: vol == null ? 0.8 : vol, wet: 0.12 });
+    [[1850, 0.5, 0.035], [3120, 0.28, 0.025], [4700, 0.12, 0.015]].forEach(([f, v, d]) => {
+      const o = ctx.createOscillator(); o.frequency.value = f * rnd(0.97, 1.03);
+      const g = ctx.createGain(); env(g, t, 0.001, v, d);
+      o.connect(g); g.connect(node); o.start(t); o.stop(t + 0.1);
+    });
+    const s = noiseSrc(); const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2400; bp.Q.value = 2;
+    const g2 = ctx.createGain(); env(g2, t, 0.001, 0.45, 0.018);
+    s.connect(bp); bp.connect(g2); g2.connect(node); s.start(t, rnd(0, 1.5), 0.04);
+  };
   A.latency = () => (ctx && typeof ctx.outputLatency === 'number' && ctx.outputLatency > 0 ? Math.min(0.3, ctx.outputLatency) : 0);
 
   // Something knocks inside the walls. z > 0 is behind you; y below zero is under the floor, under the table (the `under` event:

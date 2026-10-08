@@ -568,6 +568,11 @@
   const PLATE_BOT = 0.1, PLATE_TOP = 0.035;
   const BOARD = { cx: 772, cy: 468, w: 840, h: 560 };
   BOARD.s = BOARD.w / 1200;
+  // FRAME: what the camera frames on the wide table (places.js frameRect). It was the board's own rectangle until 2026-10-08, when the board moved
+  // off the dinner plate onto the clear wood and grew smaller (Pierce: "my board is on top of the plate and that looks wrong"): the camera
+  // still frames the old rectangle, so the photo, the candles and every flame sit on the screen exactly where they did, and only the board is
+  // smaller. (Framing the board alone would zoom the photo in and crop the candles: NEXT.md.) A place without a frameRect frames its board.
+  const FRAME = { cx: 772, cy: 468, w: 840, h: 560 };
   // Where the candles stand in the table photo (measured from each plate).
   const PLATE = { candles: [{ x: 176, y: 108 }, { x: 1424, y: 126 }] };
   // A phone held upright gets the place's portrait scene (place.portrait): its own table photo, candles, flames
@@ -784,6 +789,7 @@
     else { const a = rnd(0, Math.PI * 2); e.dx = Math.cos(a); e.dy = Math.sin(a); }
     SK.ev.push(e); if (SK.ev.length > 40) SK.ev.shift();
     SK.log.push({ name, px: e.px, ms: e.ms, delay: Math.round(o.delay || 0) }); if (SK.log.length > 80) SK.log.shift();
+    arcHit(name, e.px, e.at - performance.now());   // the shy moon flinches at what hits the table, in time with it
     return e;
   }
   // the camera's offset this frame, in screen px: the larger of the live shakes (never the sum), scaled by the screen's width
@@ -1093,10 +1099,11 @@
     moon: { cur: { ...MOON_FACES.neutral }, expr: 'watch', exprUntil: 0, lx: 0, ly: 0, set: MOON_FACES, at: MOON, gaze: 'you', gazeUntil: 0, blink: 1, blinkAt: 4100 },
   };
   // The demon's faces for a move, held for ms (then they go back to watching). Anything not in the set is watch.
-  function setFaces(sun, moon, ms) {
-    const until = G.t + (ms == null ? 9000 : ms);
+  function setFaces(sun, moon, ms, src) {
+    if (arcAsleep()) { arcNote('asleep', { sun, moon, src: src || '' }); return; }   // (the awakening: the faces are not told anything yet, and it is not kept for later)
+    const full = G.t + (ms == null ? 9000 : ms), capped = G.t + arcCap(ms == null ? 9000 : ms);   // (what the demon asks for lasts a moment: the resting face is the arc's, below)
     [['sun', sun, SUN_SET], ['moon', moon, MOON_SET]].forEach(([w, e, set]) => {
-      const f = FACE[w], x = set.includes(e) ? e : 'watch';
+      const f = FACE[w], x = arcGate(w, set.includes(e) ? e : 'watch', src), until = w === 'sun' && x === 'warn' ? full : capped;   // (the sun's warn is the lie's tell: it stays for the move)
       // a new face on the board turns the room a little (the night's heat, the other half of this build: G.heatBump, when it is there)
       if (x !== 'watch' && x !== f.expr && typeof G.heatBump === 'function') { try { G.heatBump(0.02); } catch (err) { /* the heat is the other build's */ } }
       if (w === 'moon' && x === 'grin' && f.expr !== 'grin' && !BURN.grin && fxOK() && ++BURN.grins >= 3) { BURN.grin = true; fxLog('grin', { sticks: true }); }   // shown three times in a night: it sticks
@@ -1112,7 +1119,7 @@
     for (const w of ['sun', 'moon']) {
       const f = FACE[w];
       if (f.expr === 'watch' || G.t >= f.exprUntil) continue;
-      const until = G.t + ms;
+      const until = G.t + arcCap(ms);
       if (f.gazeLock === f.exprUntil) f.gazeLock = f.gazeUntil = until;
       f.exprUntil = until;
     }
@@ -1120,7 +1127,7 @@
   // The expression a face wears now: the possession's, else the demon's own (until it lets it go), else watch.
   function faceNow(w) {
     const f = FACE[w];
-    if (S.possessing) return w === 'sun' ? 'shut' : 'grin';
+    if (S.possessing) return w === 'sun' ? (G.t - ARC.takeAt < 2600 ? 'mourn' : 'shut') : 'grin';   // (the sun mourns as it begins, then it cannot look)
     // a move that was stopped part way (the soft exit, the gentle end, a night ended) lets its faces go
     if (f.expr !== 'watch' && (G.t >= f.exprUntil || S.soft || S.stopping || !S.started)) { if (f.gazeLock === f.exprUntil) f.gazeLock = 0; f.expr = 'watch'; }
     return f.expr;
@@ -1135,21 +1142,22 @@
   // where: left, right, under (the cellar), above (the attic), behind (past them, over their shoulder), ear-left / ear-right (a voice at an
   // ear: both faces look at that side of the one holding the phone).
   const LOOK_AT = { left: [-1, 0.08], right: [1, 0.08], under: [0.1, 1], above: [-0.05, -1], behind: [0.35, -0.55], 'ear-left': [-0.8, -0.1], 'ear-right': [0.8, -0.1] };
-  function lookToward(where, ms) {
+  // (lead: the sound is lead ms away and the sun knows: its eyes go at once, the moon's a beat after the sound, as before)
+  function lookToward(where, ms, lead) {
     const v = LOOK_AT[where]; if (!v || S.possessing) return;
-    const hold = ms || rnd(1300, 2300);
+    const hold = ms || rnd(1300, 2300), ld = lead || 0;
     ['sun', 'moon'].forEach((w, k) => {
       const f = FACE[w];
       if (f.expr === 'warn') return;   // the sun's tell is never looked away from
-      const at = G.t + (k ? rnd(160, 420) : rnd(50, 180));
-      f.pendingLook = { at, until: at + hold, vec: [v[0] + rnd(-0.12, 0.12), v[1] + rnd(-0.1, 0.1)] };
+      const at = G.t + (ld ? (k ? ld + rnd(160, 420) : 0) : (k ? rnd(160, 420) : rnd(50, 180)));
+      f.pendingLook = { at, until: at + hold + (k ? 0 : ld), vec: [v[0] + rnd(-0.12, 0.12), v[1] + rnd(-0.1, 0.1)], lead: ld };
     });
   }
   // Slow blinks (2026-10-05): printed ink that blinks, slowly, now and then; one face, or both at once, which is worse. Never while it
   // shows a face with its eyes shut, and never in the taking.
   const BLINK = { next: 6000 };
   function blinkTick() {
-    if (G.t < BLINK.next || S.possessing || G.faceShow < 0.5) return;
+    if (G.t < BLINK.next || S.possessing || G.faceShow < 0.5 || arcAsleep()) return;
     BLINK.next = G.t + rnd(4500, 10000) * (S.haunted ? 0.65 : 1);
     const both = Math.random() < 0.38, who = both ? ['sun', 'moon'] : [pick(['sun', 'moon'])], dur = rnd(900, 1500);
     who.forEach((w, k) => { const f = FACE[w]; f.blinkAt = G.t + (both && k ? rnd(0, 40) : 0); f.blinkDur = dur; });
@@ -1169,22 +1177,34 @@
     G.faceShow = want >= 1 && G.faceShow >= 0.999 ? 1 : lerp(G.faceShow, want, 1 - Math.exp(-dt * 1.2));
     const typingNowLook = typingLook();
     blinkTick();
+    const asleep = arcAsleep();
     for (const w of ['sun', 'moon']) {
       const f = FACE[w];
-      const expr = faceNow(w), tgt = w === 'moon' && BURN.grin && expr === 'watch' && fxOK() ? MOON_FACES.grin : (f.set[expr] || f.set.neutral);   // (a grin that sticks, 13.8: its watch maps to grin)
+      // the awakening: the face is the printed art and its tells, set straight from the arc (no look of its own, no blink, no expression, no easing
+      // that would move it between tells); whatever else wrote its look or its expression this frame is let go
+      if (asleep) {
+        const pz = ARC.pose[w], lk = ARC.look[w];
+        KEYS.forEach((key) => { f.cur[key] = pz[key] || 0; });
+        f.expr = 'watch'; f.exprUntil = 0; f.pendingLook = null; f.gaze = 'down'; f.gazeUntil = G.t + 600; f.gazeLock = 0; f.mx = f.my = 0; f.snapUntil = 0; f.reactAt = 0; f.wasTyping = false;
+        f.lx = lk.x; f.ly = lk.y; f.blink = 1; f.blinkDur = 0;
+        continue;
+      }
+      // a resting face is the arc's (the demon's own faces, when it asks for one, are set expressions); a sticky grin stays (13.8: its watch maps to grin)
+      const expr = faceNow(w), tgt = expr === 'watch' ? arcTarget(w) : (f.set[expr] || f.set.neutral);
       // a sound: the eyes go to it (lookToward), over anything but the typing stare
       if (f.pendingLook && G.t >= f.pendingLook.at && !typingNowLook) {
         const pl = f.pendingLook; f.pendingLook = null;
-        if (G.t < pl.until) { f.gaze = 'away'; f.away = pl.vec; f.gazeUntil = f.gazeLock = pl.until; f.snapUntil = G.t + 140; f.mx = f.my = 0; f.reactAt = 0; }
+        if (G.t < pl.until) { f.gaze = 'away'; f.away = pl.vec; f.gazeUntil = f.gazeLock = pl.until; f.snapUntil = G.t + 140; f.mx = f.my = 0; f.reactAt = 0; if (pl.lead && w === 'sun') arcNote('glance', { w, lead: pl.lead }); }
       }
-      // quick and smooth into an expression (about 200 ms), then held
-      const k = 1 - Math.exp(-dt * 12);
+      // quick and smooth into an expression (about 200 ms), then held; the moon's snap back to the shy face (the ploy) is a few frames, not an ease
+      const k = w === 'moon' && ARC.snap ? 1 : 1 - Math.exp(-dt * 12);
       KEYS.forEach((key) => { f.cur[key] = lerp(f.cur[key] || 0, tgt[key] || 0, k); });
-      // typing: straight out at them; the moment it stops, back to the board (snapped, below)
-      if (typingNowLook) { f.wasTyping = true; f.gaze = 'you'; f.gazeUntil = G.t + 200; f.mx = f.my = 0; }
-      else if (f.wasTyping) { f.wasTyping = false; if (!(f.youUntil > G.t)) { f.gaze = 'p'; f.gazeUntil = G.t + rnd(1200, 2400); f.snapUntil = G.t + 160; } }   // (on them meanwhile for YOU spelled: that stands)
-      // while it ponders: the sun's eyes dart from letter to letter, the moon watches the player
-      else if (P.mode === 'ponder' && !(f.gazeLock > G.t)) {
+      // typing: straight out at them (the moon's shy of it: it looks only while they are NOT typing, until it has turned); the moment it
+      // stops, back to the board (snapped, below)
+      if (typingNowLook) { f.wasTyping = true; f.gaze = arcTypeGaze(w); f.gazeUntil = G.t + 200; f.mx = f.my = 0; }
+      else if (f.wasTyping) { f.wasTyping = false; if (!(f.youUntil > G.t)) { arcAfterTyping(w, f); } }   // (on them meanwhile for YOU spelled: that stands)
+      // while it ponders: the sun's eyes dart from letter to letter, the moon watches the player (once it has stopped being shy of them)
+      else if (P.mode === 'ponder' && !(f.gazeLock > G.t) && !(w === 'moon' && ARC.on && ARC.band < 2)) {
         if (w === 'moon') { if (f.gaze !== 'you') { f.gaze = 'you'; f.mx = f.my = 0; } f.gazeUntil = G.t + 400; }
         else if (G.t > f.gazeUntil || f.gaze !== 'letter') { f.gaze = 'letter'; f.gazeAt = GLYPHS[pick(PON_LETTERS)]; f.gazeUntil = G.t + rnd(220, 560); f.snapUntil = G.t + 90; }
       }
@@ -1203,14 +1223,15 @@
       if (moving && f.gaze === 'p') f.gazeUntil = Math.max(f.gazeUntil, G.t + 500);
       if (G.t > f.gazeUntil && !locked) {
         // the same range of looks for both, weighted to taste: the sun reads the board, the moon watches you
-        const opts = w === 'sun'
-          ? [['p', 5], ['letter', 3], ['other', 2], ['you', 2], ['ptr', live ? 2 : 0], ['away', 2]]
-          : [['you', 2], ['ptr', live ? 3 : 0], ['p', 5], ['letter', 3], ['other', 2], ['away', 3]];   // as restless as the sun (Pierce)
+        const opts = ARC.on ? arcOpts(w, live)
+          : w === 'sun'
+            ? [['p', 5], ['letter', 3], ['other', 2], ['you', 2], ['ptr', live ? 2 : 0], ['away', 2]]
+            : [['you', 2], ['ptr', live ? 3 : 0], ['p', 5], ['letter', 3], ['other', 2], ['away', 3]];   // as restless as the sun (Pierce)
         let r = Math.random() * opts.reduce((a, o) => a + o[1], 0), next = 'p';
         for (const [kk, wt] of opts) { if (wt && (r -= wt) <= 0) { next = kk; break; } }
         if (next === f.gaze && next !== 'p') next = 'p';
         // a look is held, then the eyes jump: a saccade, never a drift. Held for a while: eyes that never stop moving become wallpaper.
-        f.gaze = next; f.gazeUntil = G.t + rnd(2400, 6500);
+        f.gaze = next; f.gazeUntil = G.t + (ARC.on && w === 'moon' && next === 'you' && ARC.band === 0 ? rnd(800, 1500) : rnd(2400, 6500));   // (a shy moon's look at them is a peek)
         if (next === 'letter') { const ks = Object.keys(GLYPHS); f.gazeAt = GLYPHS[pick(ks)]; }
         // away: off the board, at something in the room nobody else can see
         if (next === 'away') { const a = rnd(0, Math.PI * 2); f.away = [Math.cos(a), Math.sin(a)]; }
@@ -1251,6 +1272,577 @@
     for (const w of ['sun', 'moon']) { const f = FACE[w]; f.gaze = 'you'; f.gazeUntil = f.gazeLock = f.microAt = f.youUntil = G.t + ms; f.mx = f.my = 0; f.reactAt = 0; }
   }
 
+  // ---------------------------------------------------------------- the faces' arc (Pierce, 2026-10-08)
+  // "I liked when the moon was the shy one ... and then would slowly get angrier after having been scared, like a ploy almost, gradual,
+  // scary. Use these faces to torment the player deeply through technique and timing with everything else." The moon (the right face, over
+  // NO) is shy and the sun (the left, over YES) is afraid. Across the night the player pities the moon, and it turns. The page owns that.
+  // And, after he saw the sheet of every face and burn ("i dont like these faces as much ... the burns are more accurate to what I like"):
+  // the arc is carried by the BURNS laid over his unchanged faces, not by swapping one cartoon expression for another. The expression
+  // changes are few, slow and small; what scares is the soot creeping in at the rim, the ink warming toward red, the ember in the eyes, the
+  // scorch ring, the hairline cracks, the glow behind the moon, and the sun going dark. Nothing here touches drawFace or the sets.
+  //
+  //   M, the minutes at the table (the clock starts when the table is up): the night's clock (arc time, which a test can run fast), plus the
+  //   dread (up to 36 s) and six seconds for each look away the moon has taken; it only ever goes up.
+  //   THE AWAKENING, minutes 0 to 4 (his, 2026-10-08: "what if the faces didnt actually come to life immediately. but tiny movements make
+  //   people wonder if they saw something. like their eyes opening i dunno"). The faces are exactly the printed art: no look, no blink, no
+  //   expression, the sun's eyes shut and the moon's lids heavy, the sun's rays not turning. For the first 30 to 60 seconds nothing moves at
+  //   all. Then tells, each tiny (a lid up a pixel or two, a pupil a pixel across, a brow, a face a hair brighter), only while their attention
+  //   is elsewhere (they are typing, the pointer is far from that face, the window has just come back, a sound has just come from the other
+  //   side), never twice running on the same face, and eased back to still within a beat if the pointer comes toward the face. They grow more
+  //   often and larger; each one leaves the face a hair more awake than it was; at 4:00 the faces are fully alive (forced from 3:20 over forty
+  //   seconds if they were watched the whole time), the sun's rays begin to turn, and the ladder takes over. The taking wakes them at once.
+  //   THE LADDER, from minute four (the ladder's own minutes, L = M minus 4):
+  //   MOON  L 0 to 3 shy       lids a little low, brows worried; looks at them only while they are NOT typing; flinches at knocks and spelling
+  //         L 3 to 6 sympathy  looks at them more; pained when the demon is cruel to them (the ploy: it is the one on their side). A faint
+  //                            rim of soot from 2:30 and a first ember in the eyes from 3:30 (while it is still waking: a glint)
+  //         L 6 to 9 uneasy    the eyes follow the piece and glance at the sun; a smile it hides; the first hairline crack (while they
+  //                            are not looking); the ink begins to warm
+  //         L 9 to 12 hungry   the smile stays a beat too long; the eyes are on the letter the piece will go to a beat BEFORE it goes; the
+  //                            glow comes up behind it, a scorch ring forms, a second crack
+  //         L 12 and on        angry, a little more each minute to eighteen: the lids lower and the brows drop a little, the ink goes red,
+  //                            the ember eyes burn, the glow stays; the sun goes dark; a flash of the evil state at the turn. After the
+  //                            taking the glow and the red are permanent; at GOOD BYE the evil state.
+  //   THE PLOY  when they look away (the window blurred or hidden, the pointer and the keys idle, typing in the box) the moon steps one notch
+  //         angrier, where they cannot see: the ink, the ember and the glow come up and the lids lower. When they look back it snaps to the
+  //         shy face it wore, and each time it takes a few more frames to get there (the burns fade out over those frames). That is the tell.
+  //         The burns that stay (a crack, the scorch) are laid while they are away.
+  //   SUN   afraid all night; tries to warn them (the moon, them, GOOD BYE); looks to the side of a sound 200 ms BEFORE it; weeps soot when it
+  //         pleads; mourns as the taking begins; goes dark (a burn) when the moon has turned, and again, for a while, as the night goes on
+  //   HOUSE a candle dying: both look at it (and, once the moon has turned, the evil state flares); in the blackout the moon's eyes are the
+  //         only thing lit, and they are on them
+  // Every change of the resting face is eased over 20 to 40 seconds (a critically damped spring: ten to ninety per cent in about thirty), and
+  // every burn level over about 25, so that none is seen happening. A held candle, the soft exit, the gentle end and the title put it all
+  // back (arcReset). The demon's own faces are held for a moment only (arcCap); wink, sneer and bored are not the arc's, and the demon's are
+  // dropped (the troll table keeps bored); no smirk, grin or hungry before minute six except in the taking.
+  const ARC = {
+    on: false, t: 0, M: 0, minutes: 0, rate: 1, band: 0, ang: 0, bonus: 0, ploys: 0,
+    OMEGA: 0.112, LEAD: 200, OVERRIDE_MS: 3200, FORESEE: 240, IDLE_MS: 7000, TYPE_AWAY_MS: 900, SETTLE: 25, STEP_WAIT: 120,
+    LADDER_AT: 4, GRIN_AT: 7,   // (the minute the ladder begins, the faces fully alive; the minute the moon may first wear a smirk, a grin or hungry: the end of shy)
+    B: 0, Bd: 0, watched: false, dorm: { sun: null, moon: null }, tellOff: { sun: null, moon: null }, hair: { sun: 0, moon: 0 }, look: { sun: { x: 0, y: 0.95 }, moon: { x: 0, y: 0.95 } },
+    wk: null, rayLag: 0, sound: { t: -1e9, side: '' }, focusAt: -1e9, shot: { sun: null, moon: null },
+    base: { sun: null, moon: null }, pose: { sun: {}, moon: {} }, tm: {},
+    away: '', awayMs: 0, awaySince: 0, notch: 0, notchGoal: 0, snap: null, mask: 0, lastSnap: null, blurred: false,
+    flinch: null, pain: null, smile: null, nextSmile: 0, plead: 0, pleadGoal: 0, seq: null, warnAt: 0, lastWarn: -Infinity, warns: 0,
+    candleWas: [false, false], lookUntil: 0, dark: false, takeAt: -Infinity, eyes: 0,
+    // the burn levels (0 to 1, eased), what the notch adds, and what is drawn now; the soot in px; the flash of the evil state
+    lvl: { sun: { ink: 0, eyes: 0, glow: 0 }, moon: { ink: 0, eyes: 0, glow: 0 } }, show: { sun: { ink: 0, eyes: 0, glow: 0 }, moon: { ink: 0, eyes: 0, glow: 0 } },
+    soot: { sun: 0, moon: 0 }, scorch: 0, flashUntil: 0, flash: 0, flashes: 0, turned: false, nextDark: 0, darks: 0, steps: [], log: [],
+  };
+  // the arc's targets, in the faces' own parameters (none of them is an entry of a set, and none changes one). Small: the burns do the rest.
+  const AP = {
+    moon: {
+      shy:      { oL: 0.62, oR: 0.62, brow: 0.75, raise: 0.05, curve: -0.15, open: 0, width: 0.7, teeth: 0, tongue: 0, tilt: 0 },
+      sympathy: { oL: 0.78, oR: 0.78, brow: 1.0, raise: 0.15, curve: -0.3, open: 0, width: 0.68, teeth: 0, tongue: 0, tilt: 0 },
+      uneasy:   { oL: 0.8, oR: 0.74, brow: 0.35, raise: 0.05, curve: -0.1, open: 0, width: 0.8, teeth: 0, tongue: 0, tilt: 0.05 },
+      hungry:   { oL: 0.92, oR: 0.92, brow: 0.0, raise: 0.1, curve: 0.05, open: 0, width: 0.9, teeth: 0, tongue: 0, tilt: 0.1 },
+      angry:    { oL: 0.6, oR: 0.6, brow: -0.8, raise: 0, curve: -0.35, open: 0, width: 0.85, teeth: 0, tongue: 0, tilt: -0.05 },
+      flinch:   { oL: 0.3, oR: 0.36, brow: 1.0, raise: 0.1, curve: -0.55, open: 0, width: 0.6, teeth: 0, tongue: 0, tilt: -0.1 },
+      pain:     { oL: 0.66, oR: 0.66, brow: 1.2, raise: 0.25, curve: -0.6, open: 0, width: 0.62, teeth: 0, tongue: 0, tilt: 0 },
+      smile:    { oL: 0.78, oR: 0.78, brow: 0, raise: 0.1, curve: 0.45, open: 0, width: 1.0, teeth: 0, tongue: 0, tilt: 0.1 },
+    },
+    sun: {
+      calm:   { oL: 0.8, oR: 0.8, brow: 0.45, raise: 0.2, curve: 0.1, open: 0, width: 0.85, teeth: 0, tongue: 0, tilt: 0 },
+      afraid: { oL: 1.22, oR: 1.22, brow: 1.1, raise: 0.8, curve: -0.5, open: 0, width: 0.74, teeth: 0, tongue: 0, tilt: 0 },
+      grief:  { oL: 0.5, oR: 0.5, brow: 1.4, raise: 0.4, curve: -1.0, open: 0, width: 0.7, teeth: 0, tongue: 0, tilt: 0 },
+      plead:  { oL: 0.95, oR: 0.95, brow: 1.35, raise: 0.4, curve: -0.8, open: 0, width: 0.7, teeth: 0, tongue: 0, tilt: 0 },
+    },
+  };
+  // the burn levels by minute (piecewise linear between the points): the moon's, and the sun's soot. The sun's other burns are events.
+  const ARC_PTS = {
+    moon: { soot: [[2.5, 0], [10, 2.5], [16, 5.5], [22, 9]], ink: [[10, 0], [22, 0.85]], eyes: [[3.5, 0], [5, 0.12], [13, 0.35], [16, 0.55], [22, 1]],
+      glow: [[13, 0], [22, 0.55]], scorch: [[13, 0], [16, 0.2], [22, 0.5]] },
+    sun: { soot: [[6, 0], [16, 2], [22, 4]] },
+  };
+  // the burns that stay, laid at these minutes, while they are away (or two minutes late): [minute, face, what]
+  const ARC_STEPS = [[9.5, 'moon', 'crack'], [13.5, 'moon', 'crack'], [16.5, 'sun', 'crack'], [18, 'moon', 'crack']];
+  const MOON_ORDER = ['shy', 'sympathy', 'uneasy', 'hungry', 'angry'];
+  const NOTCHES = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7];   // how much angrier one look away makes it, the first time and each time after
+  const ARC_MEAN = ['smirk', 'grin', 'hungry'];   // the moon's faces it does not wear before it has turned (minute six)
+  const ARC_NOT = ['wink', 'sneer'];   // not the arc's, and not the demon's: dropped (bored is the troll table's, and only its)
+  const mixP = (out, a, b, k) => { for (const key of KEYS) out[key] = (a[key] || 0) + ((b[key] || 0) - (a[key] || 0)) * k; return out; };
+  const pwl = (pts, x) => { if (x <= pts[0][0]) return pts[0][1]; for (let i = 1; i < pts.length; i++) if (x <= pts[i][0]) { const [a, b] = [pts[i - 1], pts[i]]; return a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]); } return pts[pts.length - 1][1]; };
+  const arcBandOf = (L) => (L < 3 ? 0 : L < 6 ? 1 : L < 9 ? 2 : L < 12 ? 3 : 4);   // (L: the ladder's minutes, M minus 4)
+  const arcAsleep = () => ARC.on && ARC.B < 0.999 && !arcFree() && !S.haunted;   // the awakening is not over: the faces are the printed art and its tells
+  // the demon's own and the night's biggest moments (the taking, the fight, the ending) are theirs: the arc stands back
+  const arcFree = () => !!(EVIL.want || S.possessing || S.struggling || S.ending);
+  const arcNote = (k, d) => { ARC.log.push({ t: Math.round(G.t), k, ...d }); if (ARC.log.length > 200) ARC.log.shift(); };
+  function arcGaze(w, what, ms, at) {
+    const f = FACE[w]; f.gaze = what; f.gazeUntil = f.gazeLock = G.t + ms; f.mx = f.my = 0; f.reactAt = 0; f.snapUntil = G.t + 140;
+    if (at) f.gazeAt = at;
+    if (what === 'away') { const a = rnd(0, Math.PI * 2); f.away = [Math.cos(a), Math.sin(a)]; }
+  }
+  function arcInitBase() {
+    for (const w of ['sun', 'moon']) {
+      const x = {}, v = {}; KEYS.forEach((k) => { x[k] = (w === 'moon' ? AP.moon.shy : mixP({}, AP.sun.calm, AP.sun.afraid, 0.55))[k]; v[k] = 0; });
+      ARC.base[w] = { x, v };
+      mixP(ARC.pose[w], x, x, 0);
+    }
+  }
+  arcInitBase();
+  // back to where it began: a held candle, the soft exit, the gentle end, the title, a new night (fxReset calls this)
+  function arcReset() {
+    const was = ARC.on;
+    ARC.B = 0; ARC.Bd = 0; ARC.watched = false; ARC.rayLag = 0; ARC.hair = { sun: 0, moon: 0 }; ARC.look = { sun: { x: 0, y: 0.95 }, moon: { x: 0, y: 0.95 } }; ARC.shot = { sun: null, moon: null };
+    ARC.dorm = { sun: { ...SUN_FACES.shut }, moon: { ...MOON_FACES.neutral, oL: 0.26, oR: 0.26 } };   // the printed art asleep: the sun's own shut, the moon's own neutral with its lids heavy
+    ARC.tellOff = { sun: { keys: {}, dx: 0, hair: 0 }, moon: { keys: {}, dx: 0, hair: 0 } };
+    ARC.wk = { first: rnd(30, 60), next: 0, awake: 0, last: '', lastType: { sun: '', moon: '' }, tell: null, n: 0, cancels: 0, d: { sun: Infinity, moon: Infinity }, log: [] };
+    ARC.wk.next = ARC.wk.first;
+    Object.assign(ARC, { on: false, t: 0, M: 0, minutes: 0, band: 0, ang: 0, bonus: 0, ploys: 0, away: '', awayMs: 0, awaySince: 0, notch: 0, notchGoal: 0, snap: null, mask: 0, lastSnap: null,
+      flinch: null, pain: null, smile: null, nextSmile: 0, plead: 0, pleadGoal: 0, seq: null, warnAt: 0, lastWarn: -Infinity, warns: 0, candleWas: [false, false], lookUntil: 0, dark: false,
+      takeAt: -Infinity, eyes: 0, scorch: 0, flashUntil: 0, flash: 0, flashes: 0, turned: false, nextDark: 0, darks: 0 });
+    ARC.soot = { sun: 0, moon: 0 };
+    ARC.lvl = { sun: { ink: 0, eyes: 0, glow: 0 }, moon: { ink: 0, eyes: 0, glow: 0 } }; ARC.show = { sun: { ink: 0, eyes: 0, glow: 0 }, moon: { ink: 0, eyes: 0, glow: 0 } };
+    ARC.steps = ARC_STEPS.map(([m, w, what]) => ({ m, w, what, done: false }));
+    arcInitBase();
+    const m = FACE.moon, s = FACE.sun;
+    m.pendingLook = s.pendingLook = null; m.gaze = 'down'; m.gazeUntil = 0; m.gazeLock = 0;
+    if (was) arcNote('reset', {});
+  }
+  arcReset();
+  // a face the demon asks for that the arc will not wear: a smirk, a grin or hungry teeth before minute seven (the shy one flinches at the
+  // thought, the one on their side is pained, and the resting face stays), and wink, sneer and bored (not the arc's) at any time. Not in
+  // the taking, the fight and the ending, which are free. src 'demon': bored is the troll table's alone.
+  function arcGate(w, x, src) {
+    if (!ARC.on || arcFree()) return x;
+    if (w === 'moon') {
+      if (ARC_NOT.includes(x) || (x === 'bored' && src === 'demon')) { arcNote('dropped', { w, x }); return 'watch'; }
+      if (ARC_MEAN.includes(x) && ARC.M < ARC.GRIN_AT) {
+        if (ARC.band === 0) arcFlinchAt(0, 0.9); else arcPain(1800);
+        arcNote('held', { w, x });
+        return 'watch';
+      }
+    }
+    if (w === 'sun' && x === 'relief') return 'watch';   // it is afraid all night
+    return x;
+  }
+  // what the demon asks of the faces lasts a moment (the taking, the fight and the ending keep theirs for as long as they run)
+  function arcCap(ms) { return ARC.on && !arcFree() ? Math.min(ms, ARC.OVERRIDE_MS) : ms; }
+  // (the awakening: the faces are not told anything yet. Whatever the demon or the troll table asks of them is let go, not kept for later.)
+  // the resting face: the arc's, or (off the table) the set's own neutral. A grin that sticks after the taking is the moon's (13.8).
+  function arcTarget(w) {
+    if (w === 'moon' && BURN.grin && fxOK()) return MOON_FACES.grin;
+    return ARC.on ? ARC.pose[w] : FACE[w].set.neutral;
+  }
+  // the soot the arc has laid at the rim of a face (px, creeping in; the dread's own is the larger of the two: sootTarget)
+  const arcSoot = (w) => (ARC.on ? ARC.soot[w] : 0);
+  // where the eyes go while they type, and when they stop. The sun is on them. The moon keeps its eyes down (shy of them, until the
+  // sympathy, when it watches the piece) and looks at them only when they are not typing; once it has turned it watches them type.
+  function arcTypeGaze(w) {
+    if (w !== 'moon' || !ARC.on) return 'you';
+    return ARC.band === 0 ? 'down' : ARC.band === 1 ? 'p' : 'you';
+  }
+  function arcAfterTyping(w, f) {
+    if (w === 'moon' && ARC.on && ARC.band <= 1) { f.gaze = 'you'; f.gazeUntil = G.t + (ARC.band === 0 ? rnd(900, 1500) : rnd(2600, 4200)); f.snapUntil = G.t + 160; f.mx = f.my = 0; return; }   // a peek, now they are not typing
+    f.gaze = 'p'; f.gazeUntil = G.t + rnd(1200, 2400); f.snapUntil = G.t + 160;
+  }
+  // the next look of each face, weighted by where the night is
+  function arcOpts(w, live) {
+    if (w === 'sun') return [['p', 5], ['letter', 3], ['other', ARC.band >= 2 ? 4 : 3], ['you', 2], ['ptr', live ? 2 : 0], ['away', 1.5]];
+    switch (ARC.band) {
+      case 0: return [['p', 5], ['down', 3], ['away', 3], ['letter', 1], ['other', 1], ['you', 1.2]];
+      case 1: return [['you', 5], ['p', 3], ['down', 1], ['other', 1], ['away', 0.5]];
+      case 2: return [['p', 6], ['other', 2], ['you', 2], ['letter', 2], ['ptr', live ? 2 : 0]];
+      case 3: return [['you', 5], ['p', 4], ['other', 1], ['letter', 1]];
+      default: return [['you', 7], ['p', 2], ['other', 1]];
+    }
+  }
+  // ---- the small reactions: laid over the resting face for a moment, never a change of it
+  function arcFlinchAt(delay, amp) {
+    if (!ARC.on || arcAsleep()) return;
+    const w = Math.min(0.6, [1, 0.55, 0.25, 0, 0][ARC.band] * (amp == null ? 1 : amp));
+    if (w < 0.05) return;
+    ARC.flinch = { t0: G.t + delay, amp: w, ms: 900 };
+    if (ARC.band <= 1) setTimeout(() => { if (ARC.on && !(FACE.moon.gazeLock > G.t)) arcGaze('moon', 'away', 650); }, Math.max(0, delay));
+    arcNote('flinch', { amp: +w.toFixed(2), in: Math.round(delay) });
+  }
+  function arcPain(ms) {
+    if (!ARC.on || ARC.band > 1 || arcAsleep()) return;
+    ARC.pain = { t0: G.t, ms };
+    arcGaze('moon', 'you', Math.min(ms, 2600));   // it looks at them while it hurts for them
+    arcNote('pain', { ms });
+  }
+  function arcSmile(amp, hold) { if (ARC.on && !arcAsleep() && ARC.band >= 2 && ARC.band <= 3) { ARC.smile = { t0: G.t, amp, hold }; arcNote('smile', { amp, hold }); } }
+  // what hits the table: a flinch for the shy moon, in time with the sound; and, once it has turned, the evil state flares for a breath
+  function arcHit(name, px, inMs) {
+    if (!ARC.on) return;
+    if (px >= 1.5) arcFlinchAt(Math.max(0, inMs), 1);
+    if (px >= 4 && ARC.ang >= 0.4) arcFlash(1200, 'hit', Math.max(0, inMs));
+  }
+  // the demon is cruel to them: pained, in the sympathy; a flinch for it, while it is shy
+  function arcCruel(r, violent) {
+    if (!ARC.on || ARC.band > 1 || arcFree() || arcAsleep()) return;
+    const hard = violent || /\b(PATHETIC|HOW SAD|CUTE|ADORABLE|NOBODY|ALONE|TOO LATE|DIE|DEAD|NEVER|NOT ME|LIAR|WEAK|FOOL|STUPID|SMALL)\b/.test(r.say || '')
+      || ['mourn', 'plead', 'flinch'].includes(r.sun) || !!(r.crack || (r.scratch && r.scratch.corner));
+    if (!hard) return;
+    if (ARC.band === 1) arcPain(2600); else arcFlinchAt(300, 0.9);
+  }
+  // hungry, and after: the moon looks at the letter the piece will go to before it goes. Returns the beat the move waits (ms), or 0.
+  function arcForesee(r) {
+    if (!ARC.on || ARC.band < 3 || arcFree() || arcAsleep()) return 0;
+    const m = r.moves.find((x) => ['letter', 'number', 'hover', 'circle', 'YES', 'NO', 'GOODBYE'].includes(x.to) && (GLYPHS[x.mark] || GLYPHS[x.to]));
+    const g = m ? GLYPHS[m.mark] || GLYPHS[m.to] : GLYPHS[(r.say || '').replace(/[^A-Z0-9]/g, '')[0]];
+    if (!g) return 0;
+    arcGaze('moon', 'letter', 1100, g);
+    if (ARC.band === 3) arcSmile(0.8, 1500);
+    arcNote('foresee', { to: m ? m.to + (m.mark ? ':' + m.mark : '') : 'say' });
+    return ARC.FORESEE;
+  }
+  // the sun looks to the side of a sound before it (playSfx and the house's events): 0 when it will not
+  function arcLead(k) {
+    if (!ARC.on || arcFree() || arcAsleep() || k === 'silence' || k === 'tap' || k === 'whisper-voice') return 0;
+    if (typingLook() || FACE.sun.expr === 'warn') return 0;
+    return ARC.LEAD;
+  }
+  function arcLeadWait(where) {
+    const lead = arcLead('knock');
+    if (!lead || !LOOK_AT[where]) return Promise.resolve(0);
+    lookToward(where, undefined, lead);
+    arcNote('lead', { sfx: 'house', side: where, look: where, ms: lead });
+    return new Promise((res) => setTimeout(() => res(lead), lead));
+  }
+  // the taking begins (possess): the sun mourns as it does (faceNow), with its tears, before it cannot look
+  function arcTaking() {
+    ARC.takeAt = G.t;
+    if (ARC.on) { arcGaze('sun', 'down', 2600); arcNote('taking', {}); }
+    fxTears();
+  }
+  // the evil state, without a face to hold (no warn, no grin): the ink goes red, the embers light, the glow breathes, for ms. Both faces.
+  function arcFlash(ms, why, delay) {
+    if (!ARC.on || arcFree() || !fxOK() || fxCalm()) return false;   // (a flare is a flicker: not under prefers-reduced-motion)
+    const go = () => { ARC.flashUntil = Math.max(ARC.flashUntil, G.t + ms); ARC.flashes++; arcNote('flash', { why, ms }); };
+    if (delay > 30) setTimeout(() => { if (ARC.on && !halt) go(); }, delay); else go();
+    return true;
+  }
+  // the sun goes dark (a burn): the printing at 0.35, the eye whites black, only the ember eyes left, and the moon watches it
+  function arcSunDark(ms, why) { if (fxBurn('dark', { side: 'sun', ms })) { ARC.darks++; arcNote('sunDark', { why, ms }); return true; } return false; }
+  // the sun tries to warn them: the moon, then them, then GOOD BYE. Not while it is dark, or while they type, or in the big moments.
+  function arcWarn(why) {
+    if (!ARC.on || arcFree() || arcAsleep() || ARC.seq || typingLook() || FACE.sun.expr !== 'watch' || BURN.sun.dark > 0.3 || ARC.lookUntil > G.t) return false;
+    ARC.seq = { t0: G.t, i: 0, why, steps: [
+      { at: 0, gaze: 'other', ms: 1100, plead: 0.3 },
+      { at: 1100, gaze: 'you', ms: 1300, plead: 0.85, weep: true },
+      { at: 2400, gaze: 'letter', ms: 1500, plead: 0.5, glyph: 'GOODBYE' },
+      { at: 3900, end: true },
+    ] };
+    ARC.lastWarn = G.t; ARC.warns++;
+    arcNote('warn', { why });
+    return true;
+  }
+  function arcSeqTick() {
+    const q = ARC.seq; if (!q) { ARC.pleadGoal = 0; return; }
+    if (arcFree() || typingLook() || FACE.sun.expr !== 'watch') { ARC.seq = null; ARC.pleadGoal = 0; return; }
+    while (q.i < q.steps.length && G.t - q.t0 >= q.steps[q.i].at) {
+      const s = q.steps[q.i++];
+      if (s.end) { ARC.seq = null; ARC.pleadGoal = 0; return; }
+      arcGaze('sun', s.gaze, s.ms, s.glyph ? GLYPHS[s.glyph] : null); ARC.pleadGoal = s.plead;
+      if (s.weep) fxTears();   // it weeps soot when it pleads with them (each time a little more, to the most it ever weeps)
+    }
+  }
+  // the burns that stay: laid at their minute while they are not looking, or two minutes late (arc time)
+  function arcStepsTick() {
+    for (const st of ARC.steps) {
+      if (st.done || ARC.M < st.m) continue;
+      if (!ARC.away && ARC.M < st.m + ARC.STEP_WAIT / 60) continue;
+      st.done = true;
+      if (st.what === 'crack' && fxFaceCrack(st.w, true)) arcNote('crack', { w: st.w, while: ARC.away || 'late' });
+    }
+  }
+  // the look away, and the look back: the ploy
+  function arcAwayWhy() {
+    if (document.hidden) return 'hidden';
+    if (ARC.blurred) return 'blur';
+    if (G.t - lastKey < ARC.TYPE_AWAY_MS) return 'typing';
+    if (S.live && !P.dragging && G.t - Math.max(PG.t, lastKey, lastInput) > ARC.IDLE_MS) return 'idle';
+    return '';
+  }
+  const arcPloyOn = () => ARC.on && !arcFree() && !arcAsleep() && !S.haunted && ARC.M < 19 && !fxCalm();   // (prefers-reduced-motion: no ploy, whose tell is a few frames of change)
+  function arcStepAway(why) {
+    ARC.away = why; ARC.awaySince = G.t;
+    ARC.notchGoal = arcPloyOn() ? NOTCHES[Math.min(ARC.ploys, NOTCHES.length - 1)] : 0;
+    arcNote('away', { why, goal: +ARC.notchGoal.toFixed(2) });
+  }
+  function arcBack() {
+    const dur = G.t - ARC.awaySince, ploy = arcPloyOn() && ARC.notch > 0.04, n = ARC.ploys;
+    const frames = Math.min(26, 2 + 3 * n), ms = frames * 1000 / 60;
+    if (ploy) {
+      ARC.snap = { t0: G.t, ms, from: ARC.notch, frames, n };
+      ARC.lastSnap = { frames, ms: Math.round(ms), n, from: +ARC.notch.toFixed(2), at: Math.round(G.t), why: ARC.away };
+      ARC.mask = ARC.M < ARC.GRIN_AT ? 1 : clamp(1 - (ARC.M - ARC.GRIN_AT) / 9, 0, 1);   // the shy face it shows them, which slips as the night goes on
+      if (dur >= 2000) { ARC.ploys++; ARC.bonus = Math.min(1, ARC.bonus + 0.1); }
+      if (ARC.band === 0) arcGaze('moon', 'you', rnd(900, 1400));   // it looks up at them, shy
+      if (ARC.M >= 4.5 && G.t - ARC.lastWarn > 20000 && Math.random() < 0.7) ARC.warnAt = Math.min(ARC.warnAt || Infinity, G.t + 1200);
+    }
+    ARC.notchGoal = 0; ARC.away = '';
+    arcNote('back', { dur: Math.round(dur), ploy, frames: ploy ? frames : 0, ploys: ARC.ploys });
+  }
+  addEventListener('blur', () => { ARC.blurred = true; });
+  addEventListener('focus', () => { ARC.blurred = false; ARC.focusAt = G.t; });
+  const springKey = (st, key, target, h) => {
+    const w = ARC.OMEGA, d = st.x[key] - target, e = Math.exp(-w * h), c = st.v[key] + w * d;
+    st.x[key] = target + (d + c * h) * e; st.v[key] = (st.v[key] - w * c * h) * e;
+  };
+  // ---- the awakening's tells (see the header). A tell is one small, eased change of one face, laid over the printed art: a lid up a pixel or two,
+  // a pupil a pixel across, a brow, a hair of light on the face, later a glance. It starts only when the player's attention is elsewhere (typing,
+  // the pointer far from that face, the window just back, a sound just now from the other side) and never on the face the pointer is on or
+  // coming toward; if the pointer comes toward the face it is on, the tell eases back to still within 320 ms. Never twice running on one face.
+  // Sizes are board px at the face's own scale (a lid is 0.27 r a unit of openness, a pupil 0.162 r a unit of look, a brow 0.1 r a unit).
+  const TELL_PX = { lid: 0.27, pupil: 0.162, brow: 0.1 };
+  const ss = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  function arcTellEnv(T, now) {
+    const u = now - T.t0;
+    if (T.cancel) return T.eC * (1 - clamp((now - T.cancel) / 320, 0, 1));
+    if (u < 0) return 0;
+    if (u < T.rise) return ss(0, 1, u / T.rise);
+    if (u < T.rise + T.hold) return 1;
+    return 1 - ss(0, 1, (u - T.rise - T.hold) / T.down);
+  }
+  function arcTellStart(w) {
+    const K = ARC.wk, p = clamp((ARC.t - 30) / 210, 0, 1), s = Math.pow(p, 1.2), r = FACE[w].at.r;
+    const pool = w === 'moon'
+      ? [['lid', 3], ['pupil', 3], ['bright', 2], ['glance', p > 0.3 ? 2 : 0]]
+      : [['brow', 3], ['bright', 2], ['lid', p > 0.2 ? 3 : 0], ['glance', p > 0.3 ? 2 : 0]];
+    const opts = pool.filter(([ty, wt]) => wt > 0 && ty !== K.lastType[w]);
+    let q = Math.random() * opts.reduce((a, o) => a + o[1], 0), type = opts[0][0];
+    for (const [ty, wt] of opts) { if ((q -= wt) <= 0) { type = ty; break; } }
+    const T = { w, type, t0: G.t, at: +ARC.t.toFixed(1), rise: 260, hold: 250 + 800 * p, down: 700 + 600 * p, cancel: 0, eC: 0, p: +p.toFixed(3), keys: {}, dx: 0, hair: 0, px: 0 };
+    switch (type) {
+      case 'lid': { const d = w === 'moon' ? 0.05 + 0.32 * s : 0.16 + 0.6 * s; T.keys = { oL: d, oR: d * (w === 'moon' ? 0.7 : 1) }; T.px = d * TELL_PX.lid * r; break; }
+      case 'pupil': { const d = (0.07 + 0.5 * s) * (Math.random() < 0.5 ? -1 : 1); T.dx = d; T.px = Math.abs(d) * TELL_PX.pupil * r; break; }
+      case 'brow': { const d = 0.1 + 0.5 * s, b = 0.05 + 0.3 * s; T.keys = { raise: d, brow: b }; T.px = Math.max(d, b) * TELL_PX.brow * r; break; }
+      case 'bright': T.hair = 0.03 + 0.08 * s; T.px = 0; break;
+      default: { const d = (w === 'sun' ? 1 : -1) * (0.55 + 0.45 * s); T.dx = d; T.hold += 600; T.px = Math.abs(d) * TELL_PX.pupil * r; }   // a glance toward the other face
+    }
+    T.px = +T.px.toFixed(2);
+    K.tell = T; K.n++; K.lastType[w] = type;
+    T.entry = { n: K.n, t: T.at, w, type, p: T.p, px: T.px, ms: Math.round(T.rise + T.hold + T.down), gap: 0 }; K.log.push(T.entry); if (K.log.length > 80) K.log.shift();
+    arcNote('tell', { w, type, px: T.px, p: T.p });
+  }
+  // every frame while the faces sleep: who is looking where, a tell that is running or must stop, a new one when it is time and the chance is there
+  function arcWake(dt) {
+    const K = ARC.wk, tf = ARC.tellOff, info = {};
+    for (const w of ['sun', 'moon']) {
+      const at = FACE[w].at, c = boardToScreen(at.x, at.y), rpx = at.r * BOARD.s * CAM.s, valid = PG.x >= 0;
+      const d = valid ? Math.hypot(PG.x - c.x, PG.y - c.y) : Infinity, v = isFinite(d) && isFinite(K.d[w]) ? (K.d[w] - d) / Math.max(dt, 1e-3) : 0;
+      K.d[w] = d;
+      const onFace = d < Math.max(150, 2.6 * rpx), approaching = d < 700 && v > 260;
+      const away = d > Math.max(320, 5.5 * rpx), typing = G.t - lastKey < 1500, back = G.t - ARC.focusAt < 2500;
+      const other = G.t - ARC.sound.t < 1500 && ARC.sound.side === (w === 'sun' ? 'right' : 'left');
+      info[w] = { d, onFace, approaching, ok: !onFace && !approaching && (away || typing || back || other), why: away ? 'far' : typing ? 'typing' : back ? 'back' : other ? 'sound' : '' };
+    }
+    ARC.watched = ['sun', 'moon'].some((w) => info[w].onFace || info[w].approaching);
+    const T = K.tell;
+    if (T) {
+      const i = info[T.w];
+      if (!T.cancel && (i.onFace || i.approaching)) { T.cancel = G.t; T.eC = arcTellEnv(T, G.t - 1); K.cancels++; K.log.push({ n: T.n, t: +ARC.t.toFixed(1), w: T.w, type: T.type, cancelled: true }); arcNote('tellCancel', { w: T.w, type: T.type }); }
+      if (G.t - T.t0 > T.rise + T.hold + T.down || (T.cancel && G.t - T.cancel > 320)) {
+        // done: a tell that was not cut short leaves the face a little more awake, toward where the night says it should be by now
+        if (!T.cancel) ARC.B = Math.min(1, ARC.B + Math.max(0, ss(40, 215, ARC.t) - ARC.B) * 0.85 + 0.004);
+        K.tell = null;
+        const p = clamp((ARC.t - 30) / 210, 0, 1), gap = 26 * Math.pow(5.5 / 26, p) * rnd(0.75, 1.35) * (T.cancel ? 0.5 : 1);   // (26 s apart at first, 5.5 s at four minutes)
+        K.next = ARC.t + gap; K.last = T.w; if (T.entry) T.entry.gap = Math.round(gap * 10) / 10;
+      }
+    } else if (ARC.t >= K.next && fxOK()) {
+      const cands = ['sun', 'moon'].filter((w) => w !== K.last && info[w].ok);
+      if (cands.length) arcTellStart(pick(cands));
+    }
+    // what is laid on each face this frame
+    for (const w of ['sun', 'moon']) {
+      const o = tf[w], t = K.tell && K.tell.w === w ? K.tell : null, e = t ? arcTellEnv(t, G.t) : 0;
+      o.keys = {}; o.dx = 0; o.hair = 0;
+      if (t && e > 0) { for (const key in t.keys) o.keys[key] = t.keys[key] * e; o.dx = t.dx * e; o.hair = t.hair * e; }
+      ARC.look[w].x = o.dx; ARC.look[w].y = 0.95; ARC.hair[w] = o.hair;
+    }
+  }
+  // the sun's rays are the one thing that turns by itself in drawFace (G.t / 9000): while the faces sleep they stand, and they begin to turn as
+  // the faces wake (from 3:50 over forty seconds) or at once in the taking. drawFace is never touched: it is handed a G.t that stopped.
+  function arcRayLag(dt, taken) {
+    const rate = S.haunted ? 1 : taken ? ss(0, 2000, G.t - ARC.takeAt) : ss(230, 270, ARC.t);
+    ARC.rayLag += dt * 1000 * (1 - rate);
+  }
+  // a hair of light over a face (a tell: 'bright'), inside its disc, added
+  function drawArcHair(c, w) {
+    const a = ARC.hair[w]; if (!(a > 0.002) || G.faceShow < 0.5) return;
+    const at = FACE[w].at;
+    c.save(); c.translate(at.x, at.y); c.beginPath(); c.arc(0, 0, at.r * 1.02, 0, Math.PI * 2); c.clip();
+    c.globalCompositeOperation = 'lighter'; c.fillStyle = `rgba(255,206,150,${(a * G.faceShow).toFixed(4)})`; c.fillRect(-at.r * 1.1, -at.r * 1.1, at.r * 2.2, at.r * 2.2);
+    c.restore();
+  }
+  // the faces' own layers, drawn the way the frame draws them but alone on a transparent square (a test's look at whether a face moves: the room's
+  // grain and candlelight move every frame of the screen, the face does not). Returns what changed since the last call for that face.
+  function arcFaceShot(w) {
+    const f = FACE[w], R = 150, c = document.createElement('canvas'); c.width = c.height = R * 2;
+    const g = c.getContext('2d', { willReadFrequently: true }); g.translate(R - f.at.x, R - f.at.y);
+    const t0 = G.t; G.t = t0 - ARC.rayLag;
+    try { drawFace(g, w); drawFaceDark(g, w); drawArcHair(g, w); drawEvilFace(g, w); drawFaceBurns(g, w); } finally { G.t = t0; }
+    const d = g.getImageData(0, 0, R * 2, R * 2).data, prev = ARC.shot[w];
+    let h = 2166136261 >>> 0, changed = 0, maxd = 0, x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
+    for (let i = 0; i < d.length; i += 4) {
+      h = Math.imul(h ^ d[i] ^ (d[i + 1] << 8) ^ (d[i + 2] << 16) ^ (d[i + 3] << 24), 16777619) >>> 0;
+      if (prev) { const m = Math.max(Math.abs(d[i] - prev[i]), Math.abs(d[i + 1] - prev[i + 1]), Math.abs(d[i + 2] - prev[i + 2]), Math.abs(d[i + 3] - prev[i + 3])); if (m > 0) { changed++; maxd = Math.max(maxd, m); const px = (i >> 2) % (R * 2), py = ((i >> 2) / (R * 2)) | 0; x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py); } }
+    }
+    ARC.shot[w] = d.slice();
+    return { hash: h.toString(16), changed, maxd, bbox: changed ? [x1 - x0 + 1, y1 - y0 + 1] : [0, 0] };
+  }
+  // every frame, before the faces look where they look
+  function arcTick(dt) {
+    const live = S.started && S.sitAt > 0 && !halt && !S.stopping && !S.soft;
+    if (!live) { if (ARC.on || ARC.eyes || ARC.flash) arcReset(); return; }
+    if (!ARC.on) { ARC.on = true; arcNote('on', {}); }
+    const hArc = dt * ARC.rate;
+    if (!document.hidden && document.body.classList.contains('playing')) ARC.t += hArc;   // (the night's clock starts when the table is up)
+    const taken = !!(S.possessing || S.haunted || S.struggling || S.ending);
+    ARC.minutes = ARC.t / 60;
+    ARC.M = Math.max(ARC.M, ARC.minutes + Math.min(0.6, S.dread * 0.06) + ARC.bonus, taken ? ARC.LADDER_AT + 13 : 0);
+    const M = ARC.M, L = M - ARC.LADDER_AT;
+    // the awakening: tells while it lasts; the faces are fully alive at 4:00 (forced from 3:20 over forty seconds), at once in the taking or any big moment
+    if (taken || arcFree()) ARC.B = ARC.Bd = 1;
+    else if (ARC.B < 1) { ARC.B = Math.max(ARC.B, ss(200, 240, ARC.t)); if (ARC.B >= 0.999) ARC.B = 1; }
+    if (ARC.B >= 0.999 && ARC.wk && !ARC.wk.awake) { ARC.wk.awake = +ARC.t.toFixed(1); arcNote('awake', { t: ARC.wk.awake, tells: ARC.wk.n, by: taken || arcFree() ? 'a big moment' : 'the night' }); }   // (awake: the night's clock when the faces became fully alive)
+    if (ARC.B < 0.999) arcWake(dt); else { ARC.tellOff.sun = { keys: {}, dx: 0, hair: 0 }; ARC.tellOff.moon = { keys: {}, dx: 0, hair: 0 }; ARC.hair.sun = ARC.hair.moon = 0; if (ARC.wk && ARC.wk.tell) ARC.wk.tell = null; }
+    arcRayLag(dt, taken);
+    ARC.band = arcBandOf(L);
+    ARC.ang = taken ? 1 : clamp((L - 12) / 6, 0, 1);
+    // the resting faces: the target of the hour, and a slow spring to it (a change of mood takes about half a minute and is never seen going)
+    const mt = ARC.band === 4 ? mixP(ARC.tm, AP.moon.hungry, AP.moon.angry, ARC.ang) : AP.moon[MOON_ORDER[ARC.band]];
+    let st = mixP({}, AP.sun.calm, AP.sun.afraid, taken ? 0.9 : 0.55 + 0.35 * clamp(L / 12, 0, 1));
+    if (taken) st = mixP(st, st, AP.sun.grief, 0.55);
+    for (const key of KEYS) { springKey(ARC.base.moon, key, mt[key] || 0, hArc); springKey(ARC.base.sun, key, st[key] || 0, hArc); }
+    // the look away and the look back
+    const why = arcAwayWhy();
+    ARC.awayMs = why ? ARC.awayMs + dt * 1000 : 0;
+    const need = why === 'typing' ? 500 : why === 'idle' ? 0 : 350;
+    if (why && ARC.awayMs >= need) { if (!ARC.away) arcStepAway(why); }
+    else if (ARC.away) arcBack();
+    if (ARC.snap) {
+      const u = (G.t - ARC.snap.t0) / ARC.snap.ms;
+      ARC.notch = ARC.snap.from * (1 - clamp(u, 0, 1));
+      if (u >= 1) { ARC.snap = null; ARC.notch = 0; }
+    } else ARC.notch += (ARC.notchGoal - ARC.notch) * (1 - Math.exp(-dt / 0.7));
+    ARC.mask = Math.max(0, ARC.mask - dt / 24);
+    if (!arcPloyOn() && !ARC.snap) ARC.notchGoal = 0;
+    // the small reactions
+    const env = (e, up, hold, down) => { if (!e) return 0; const t = G.t - e.t0; return t < 0 ? 0 : t < up ? t / up : t < up + hold ? 1 : Math.max(0, 1 - (t - up - hold) / down); };
+    const fl = ARC.flinch ? (() => { const t = G.t - ARC.flinch.t0; return t < 0 ? 0 : (t < 60 ? t / 60 : Math.exp(-(t - 60) / (ARC.flinch.ms * 0.35))) * ARC.flinch.amp; })() : 0;
+    if (ARC.flinch && G.t - ARC.flinch.t0 > ARC.flinch.ms * 2) ARC.flinch = null;
+    const pe = ARC.pain ? env(ARC.pain, 300, ARC.pain.ms, 800) : 0; if (ARC.pain && G.t - ARC.pain.t0 > ARC.pain.ms + 1200) ARC.pain = null;
+    const se = ARC.smile ? env(ARC.smile, 160, ARC.smile.hold, 300) * ARC.smile.amp : 0; if (ARC.smile && G.t - ARC.smile.t0 > ARC.smile.hold + 600) ARC.smile = null;
+    if (ARC.band >= 2 && ARC.band <= 3 && !ARC.away && !ARC.smile && G.t >= ARC.nextSmile) {
+      if (ARC.nextSmile) arcSmile(ARC.band === 2 ? 0.45 : 0.8, ARC.band === 2 ? 450 : 1500);   // a smile it hides; later, one it holds a beat too long
+      ARC.nextSmile = G.t + rnd(7000, 14000);
+    }
+    // the moon's face: the base; the shy mask after a snap; pain, smile, flinch, and, last, the notch the ploy took
+    const mo = ARC.pose.moon;
+    for (const key of KEYS) mo[key] = ARC.base.moon.x[key];
+    if (ARC.mask > 0.001) mixP(mo, mo, AP.moon.shy, ARC.mask);
+    if (pe > 0.001) mixP(mo, mo, AP.moon.pain, pe * 0.9);
+    if (se > 0.001) mixP(mo, mo, AP.moon.smile, se);
+    if (fl > 0.001) mixP(mo, mo, AP.moon.flinch, fl);
+    if (ARC.notch > 0.001) mixP(mo, mo, AP.moon.angry, ARC.notch);
+    // the sun's: afraid, and, when it tries to warn them, pleading
+    ARC.plead += (ARC.pleadGoal - ARC.plead) * (1 - Math.exp(-dt * 4));
+    const su = ARC.pose.sun;
+    for (const key of KEYS) su[key] = ARC.base.sun.x[key];
+    if (ARC.plead > 0.001) mixP(su, su, AP.sun.plead, ARC.plead);
+    // the awakening: asleep, the face is the printed art (the sun shut, the moon's lids heavy) and the ladder's own face comes in as it wakes; the
+    // sun's lids stay shut a while longer than the rest (they open as a tell, once it is awake enough)
+    // (what a tell leaves behind is eased in over about a second, and not at all while the pointer is on or coming to a face, until 3:20)
+    if (ARC.B >= 0.999 && ARC.Bd < 1) ARC.Bd = Math.min(1, ARC.Bd + dt * 0.5);
+    else if (ARC.B < 0.999) ARC.Bd += (ARC.B - ARC.Bd) * (ARC.watched && ARC.t < 200 ? 0 : 1 - Math.exp(-dt / 1.0));
+    if (ARC.B < 0.999) {
+      for (const w of ['sun', 'moon']) {
+        const D = ARC.dorm[w], Pz = ARC.pose[w], tf = ARC.tellOff[w];
+        for (const key of KEYS) { const b = w === 'sun' && (key === 'oL' || key === 'oR') ? ss(0.25, 1, ARC.Bd) : ARC.Bd; Pz[key] = D[key] + (Pz[key] - D[key]) * b + (tf.keys[key] || 0); }
+      }
+    }
+    // it tries to warn them (not before the moon is pitied; more often once the moon is hungry, and soon after a look away it took)
+    if (M >= 4.5 && ARC.warnAt === 0 && ARC.B >= 0.999) ARC.warnAt = G.t + 2000;
+    if (ARC.warnAt && G.t >= ARC.warnAt && arcWarn(ARC.ploys ? 'ploy' : 'night')) ARC.warnAt = G.t + rnd(40000, 75000) * (M >= 13 ? 0.6 : 1);
+    arcSeqTick();
+    // ---- the burns: the levels, eased over about twenty-five seconds (arc time), so that none is seen coming
+    const k25 = 1 - Math.exp(-hArc / ARC.SETTLE);
+    for (const w of ['sun', 'moon']) {
+      const L = ARC.lvl[w], P2 = ARC_PTS[w] || {}, t = {};
+      for (const key of ['ink', 'eyes', 'glow']) t[key] = P2[key] ? pwl(P2[key], M) : 0;
+      if (taken && w === 'moon') { t.ink = Math.max(t.ink, 0.6); t.eyes = Math.max(t.eyes, 0.8); t.glow = Math.max(t.glow, 0.6); }   // after the taking the red and the glow are permanent
+      for (const key of ['ink', 'eyes', 'glow']) L[key] += (t[key] - L[key]) * k25;
+      const sootT = P2.soot ? pwl(P2.soot, M) : 0;
+      ARC.soot[w] = Math.max(ARC.soot[w], ARC.soot[w] + (sootT - ARC.soot[w]) * k25);   // (it creeps in and stays: sootTarget reads it)
+    }
+    if (fxOK()) {
+      const sc = pwl(ARC_PTS.moon.scorch, M) * 0.95 + (taken ? 0.5 : 0);
+      ARC.scorch = Math.max(ARC.scorch, ARC.scorch + (Math.min(0.8, sc) - ARC.scorch) * k25);
+      if (ARC.scorch > BURN.moon.scorch) BURN.moon.scorch = Math.min(0.8, ARC.scorch);
+    }
+    // the flash of the evil state (no face held): up in a third of a second, down in two
+    ARC.flash = G.t < ARC.flashUntil ? Math.min(1, ARC.flash + dt / 0.3) : Math.max(0, ARC.flash - dt / 2);
+    // what is drawn now: the levels, what the notch adds to the moon (where they cannot see), and the flash
+    for (const w of ['sun', 'moon']) {
+      const L = ARC.lvl[w], o = ARC.show[w], nt = w === 'moon' ? ARC.notch : 0;
+      o.ink = clamp(Math.max(L.ink + nt * 0.9, ARC.flash), 0, 1);
+      o.eyes = clamp(Math.max(L.eyes + nt * 1.0, ARC.flash), 0, 1);
+      o.glow = clamp(Math.max(L.glow + nt * 0.7, ARC.flash * 0.9), 0, 1);
+    }
+    arcStepsTick();
+    // the turn: the first time the moon is angry, the evil state flares and the sun goes dark; after that the sun goes dark now and again
+    if (!ARC.turned && ARC.ang >= 0.12 && !taken) {
+      ARC.turned = true; ARC.nextDark = ARC.t + rnd(40, 70);
+      arcFlash(2600, 'turn'); arcSunDark(16000, 'turn');
+    } else if (ARC.turned && !taken && ARC.ang >= 0.5 && ARC.t >= ARC.nextDark && !ARC.seq) {
+      ARC.nextDark = ARC.t + rnd(45, 80); arcSunDark(9000, 'night');
+    }
+    // a candle dying: both faces look at it (the lit one then watches the dark one, fxFaceTick), and once the moon has turned the evil state flares
+    for (let i = 0; i < 2; i++) {
+      const out = G.candleOutT[i] >= 1;
+      if (out && !ARC.candleWas[i] && !S.possessing) {
+        const c = candleOf(i ? 'moon' : 'sun');
+        for (const w of ['sun', 'moon']) arcGaze(w, 'letter', 2400, { x: c.x, y: c.y });
+        ARC.lookUntil = G.t + 2400; arcNote('candle', { i });
+        if (ARC.ang >= 0.2) arcFlash(3000, 'candle');
+      }
+      ARC.candleWas[i] = out;
+    }
+    // the blackout: both candles out (or the room's black): the moon's eyes are the only thing lit, and they are on them
+    const black = !S.possessing && ((G.candleOut[0] > 0.85 && G.candleOut[1] > 0.85) || G.black > 0.6);
+    if (black !== ARC.dark) { ARC.dark = black; arcNote('dark', { on: black }); }
+    const eyes = black && !arcAsleep();   // (asleep, its lids are down: nothing to see in the dark)
+    if (eyes) { arcGaze('moon', 'you', 500); FACE.moon.youUntil = G.t + 500; }
+    ARC.eyes += ((eyes ? 1 : 0) - ARC.eyes) * (1 - Math.exp(-dt * (eyes ? 1.6 : 4)));
+  }
+  // in the blackout, after the room's light (like the flames): two points in the moon's eyes, where its eyes are looking
+  function drawArcEyes() {
+    if (ARC.eyes < 0.02 || G.faceShow < 0.5) return;
+    const f = FACE.moon, F = f.cur, r = MOON.r, em = EVIL.ember, unit = BOARD.s * CAM.s * DPR;
+    const pulse = 0.85 + 0.15 * Math.sin((G.t / 1000) * Math.PI * 2 * 0.8 + 1.7);
+    cx.save(); cx.setTransform(1, 0, 0, 1, 0, 0); cx.globalCompositeOperation = 'lighter';
+    for (const [side, open] of [[-1, F.oL * f.blink], [1, F.oR * f.blink]]) {
+      const o = Math.max(open, 0.55);   // (lids lowered or not, in the dark the eyes are open on them)
+      const ex = side * r * 0.36, ey = -r * 0.1, ew = r * 0.27, eh = r * 0.15 * o;
+      const px = ex + clamp(f.lx, -1.1, 1.1) * ew * 0.6, py = ey + clamp(f.ly, -1.1, 1.1) * eh * 0.45;
+      const s = boardToScreen(MOON.x + px, MOON.y + py), gx = s.x * DPR, gy = s.y * DPR, gr = r * 0.2 * unit * (0.8 + 0.4 * pulse);
+      if (!(gr > 0.5) || !isFinite(gx + gy + gr)) continue;
+      const gg = cx.createRadialGradient(gx, gy, 0, gx, gy, gr);
+      gg.addColorStop(0, `rgba(${em[0]},${em[1]},${em[2]},${0.85 * ARC.eyes * pulse})`); gg.addColorStop(1, `rgba(${em[0]},${em[1] >> 1},${em[2] >> 2},0)`);
+      cx.fillStyle = gg; cx.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
+      cx.fillStyle = `rgba(255,${240 - (255 - em[1]) * 0.2 | 0},${215 - (255 - em[2]) * 0.2 | 0},${ARC.eyes})`; cx.beginPath(); cx.arc(gx, gy, Math.max(1.4 * DPR, 0.024 * r * unit), 0, Math.PI * 2); cx.fill();
+    }
+    cx.restore();
+  }
+  // ?debug: the arc as a test sees it, and the means to run the night fast (rate: arc seconds per second; advance: a jump of minutes)
+  function arcState() {
+    const pick2 = (o) => { const r = {}; KEYS.forEach((k) => { r[k] = +(o[k] || 0).toFixed(3); }); return r; };
+    const fx = (w) => ({ expr: faceNow(w), gaze: FACE[w].gaze, lx: +FACE[w].lx.toFixed(3), ly: +FACE[w].ly.toFixed(3), cur: pick2(FACE[w].cur), base: pick2(ARC.base[w].x), pose: pick2(ARC.pose[w]),
+      lvl: { ink: +ARC.lvl[w].ink.toFixed(3), eyes: +ARC.lvl[w].eyes.toFixed(3), glow: +ARC.lvl[w].glow.toFixed(3) }, show: { ink: +ARC.show[w].ink.toFixed(3), eyes: +ARC.show[w].eyes.toFixed(3), glow: +ARC.show[w].glow.toFixed(3) },
+      soot: +ARC.soot[w].toFixed(2), burn: { soot: +BURN[w].soot.toFixed(2), scorch: +BURN[w].scorch.toFixed(2), cracks: BURN[w].cracks.length, tear: +BURN[w].tear.toFixed(2), dark: +BURN[w].dark.toFixed(2) } });
+    return {
+      on: ARC.on, t: +ARC.t.toFixed(2), minutes: +ARC.minutes.toFixed(3), M: +ARC.M.toFixed(3), band: ARC.band, mood: MOON_ORDER[ARC.band], ang: +ARC.ang.toFixed(3), rate: ARC.rate,
+      ploys: ARC.ploys, bonus: +ARC.bonus.toFixed(2), away: ARC.away, notch: +ARC.notch.toFixed(3), snap: ARC.snap ? { frames: ARC.snap.frames, ms: Math.round(ARC.snap.ms) } : null, lastSnap: ARC.lastSnap,
+      B: +ARC.B.toFixed(3), asleep: arcAsleep(), wake: ARC.wk ? { n: ARC.wk.n, first: +ARC.wk.first.toFixed(1), next: +ARC.wk.next.toFixed(1), last: ARC.wk.last, cancels: ARC.wk.cancels, tell: ARC.wk.tell ? { w: ARC.wk.tell.w, type: ARC.wk.tell.type, px: ARC.wk.tell.px, env: +arcTellEnv(ARC.wk.tell, G.t).toFixed(3), cancel: !!ARC.wk.tell.cancel } : null, log: ARC.wk.log.slice(-60) } : null, rayLag: Math.round(ARC.rayLag), look: ARC.look, hair: ARC.hair,
+      mask: +ARC.mask.toFixed(3), plead: +ARC.plead.toFixed(3), seq: !!ARC.seq, warns: ARC.warns, flash: +ARC.flash.toFixed(3), flashes: ARC.flashes, darks: ARC.darks, turned: ARC.turned,
+      eyes: +ARC.eyes.toFixed(3), dark: ARC.dark, takeAt: ARC.takeAt, steps: ARC.steps.map((s) => ({ m: s.m, w: s.w, what: s.what, done: s.done })),
+      moon: fx('moon'), sun: fx('sun'), log: ARC.log.slice(-60),
+    };
+  }
+
   // ---------------------------------------------------------------- the evil state (DIRECTION.md 13.8): drawn over the faces, never into them
   // Pierce, 2026-10-08: "Their faces are fucking creepy and I love it. I love when one looks like an evil grin." The faces are his, and they
   // stay his: drawFace and the sets above are not touched. When the board turns on someone (the GOOD BYE hold, below) both faces go to what
@@ -1279,22 +1871,25 @@
     EVIL.k = EVIL.want > EVIL.k ? Math.min(1, EVIL.k + dt / 0.3) : Math.max(0, EVIL.k - dt / 2);
   }
   // behind each disc: a dim red-orange radial glow at 1.6 radii, breathing at about 0.8 Hz (additive, so it only ever adds light)
+  // (per face: the evil state's, or the arc's own level for it: the moon's glow comes up as it turns and the ploy's notch lifts it for a moment)
   function drawEvilGlow(c) {
-    if (EVIL.k < 0.01 || G.faceShow < 0.5) return;
-    const breath = 0.8 + 0.2 * Math.sin((G.t / 1000) * Math.PI * 2 * 0.8), a = 0.7 * EVIL.k * breath, g = EVIL.glow;
-    c.save(); c.globalCompositeOperation = 'lighter';
-    for (const f of [SUN, MOON]) {
+    if (G.faceShow < 0.5) return;
+    const breath = 0.8 + 0.2 * Math.sin((G.t / 1000) * Math.PI * 2 * 0.8), g = EVIL.glow;
+    for (const [w, f] of [['sun', SUN], ['moon', MOON]]) {
+      const kf = Math.max(EVIL.k, ARC.show[w].glow), a = 0.7 * kf * breath;
+      if (kf < 0.01) continue;
+      c.save(); c.globalCompositeOperation = 'lighter';
       const R = f.r * 1.6, gg = c.createRadialGradient(f.x, f.y, f.r * 0.3, f.x, f.y, R);
       gg.addColorStop(0, `rgba(${g[0]},${g[1]},${g[2]},${a})`); gg.addColorStop(0.55, `rgba(${g[0]},${g[1]},${g[2]},${a * 0.45})`); gg.addColorStop(1, `rgba(${g[0]},${g[1]},${g[2]},0)`);
       c.fillStyle = gg; c.fillRect(f.x - R, f.y - R, R * 2, R * 2);
+      c.restore();
     }
-    c.restore();
   }
   // over one face, in its own transform: the ink warmed (red light added inside the disc, and over the sun's rays), and an ember in each eye
   function drawEvilFace(c, w) {
-    const ke = Math.max(EVIL.k, BURN.eyes, BURN[w].dark * 0.9);   // the eyes: the evil state's, a `burn: ember` call's, or the dark face's own
+    const ke = Math.max(EVIL.k, BURN.eyes, BURN[w].dark * 0.9, ARC.show[w].eyes);   // the eyes: the evil state's, a `burn: ember` call's, the dark face's own, or the arc's (the moon's glint, then its fire)
     if (ke < 0.01 || G.faceShow < 0.5) return;
-    const f = FACE[w], at = f.at, r = at.r, F = f.cur, k = EVIL.k, ink = EVIL.ink, em = EVIL.ember;
+    const f = FACE[w], at = f.at, r = at.r, F = f.cur, k = Math.max(EVIL.k, ARC.show[w].ink), ink = EVIL.ink, em = EVIL.ember;
     const pulse = 0.85 + 0.15 * Math.sin((G.t / 1000) * Math.PI * 2 * 0.8 + (w === 'moon' ? 1.7 : 0));
     c.save(); c.translate(at.x, at.y);
     c.globalCompositeOperation = 'lighter';
@@ -2645,7 +3240,7 @@
   const SPRS = 2;   // sprites are made at twice their size
   const mkBurn = () => ({ soot: 0, sootPx: -1, sootCv: null, scorch: 0, scorchCv: null, scorchKey: '', cracks: [], tear: 0, tearMax: 0, tearSeed: Math.random() * 1000, dark: 0, darkUntil: 0 });
   const BURN = { sun: mkBurn(), moon: mkBurn(), eyes: 0, eyesUntil: 0, grin: false, grins: 0, smoke: 0, log: [] };
-  const sootTarget = (w) => Math.min(Math.max(0, S.dread - 3) + BURN.smoke, FACE[w].at.r * 0.3);
+  const sootTarget = (w) => Math.min(Math.max(Math.max(0, S.dread - 3), arcSoot(w)) + BURN.smoke, FACE[w].at.r * 0.3);   // (the dread's own, or the arc's, which starts earlier for the moon and keeps to the minutes)
   // the candle a face is nearest, in board units
   function candleOf(w) {
     const k0 = PLATE.candles[w === 'sun' ? 0 : 1];
@@ -2703,7 +3298,7 @@
     for (let i = 0; i < 26; i++) { const a = (i / 26) * 6.283 + rg, rad = r * (0.86 + 0.03 * hash2(i, 4, 7)); x.beginPath(); x.arc(Math.cos(a) * rad, Math.sin(a) * rad, 1.2 + 2 * hash2(i, 6, 3), 0, 6.283); x.stroke(); }
     return c;
   }
-  function fxFaceCrack(w) {
+  function fxFaceCrack(w, quiet) {
     if (!fxOK()) return false;
     const b = BURN[w], r = FACE[w].at.r;
     if (b.cracks.length >= FXB.faceCracks) return false;
@@ -2713,7 +3308,7 @@
     // a second crack branches off the first, at its second point
     const bp = pts[1], ba = ang + (Math.random() < 0.5 ? 0.9 : -0.9), branch = [bp, [bp[0] + Math.cos(ba) * r * 0.14, bp[1] + Math.sin(ba) * r * 0.14], [bp[0] + Math.cos(ba + 0.3) * r * 0.26, bp[1] + Math.sin(ba + 0.3) * r * 0.26]];
     b.cracks.push({ pts, branch, t0: fxNow() });
-    if (A.splinter) A.splinter(0.8);
+    if (A.splinter && !quiet) A.splinter(0.8);   // (the arc's own cracks are laid in silence, while they are not looking)
     fxLog('faceCrack', { face: w, n: b.cracks.length });
     return true;
   }
@@ -2742,7 +3337,7 @@
       case 'ember': BURN.eyesUntil = fxNow() + (o.ms || 6500); break;
       case 'scorch': for (const f of o.side ? [w] : ['sun', 'moon']) BURN[f].scorch = Math.min(0.8, BURN[f].scorch + 0.3); break;
       case 'tears': if (!fxTears()) return false; break;
-      case 'grin': BURN.grin = true; BURN.grins = Math.max(BURN.grins, 3); break;
+      case 'grin': if (ARC.on && ARC.M < ARC.GRIN_AT && !S.haunted && !S.possessing && !EVIL.want) return false; BURN.grin = true; BURN.grins = Math.max(BURN.grins, 3); break;   // (the moon has not turned: no grin for good before minute six)
       case 'dark': BURN.sun.darkUntil = fxNow() + (o.ms || 9000); break;
       default: return false;
     }
@@ -2767,7 +3362,7 @@
     // the face that is still lit watches the dark one, and holds it
     const sd = BURN.sun.dark, md = BURN.moon.dark;
     const watcher = sd > 0.6 && md < 0.4 ? 'moon' : md > 0.6 && sd < 0.4 ? 'sun' : '';
-    if (watcher) { const f = FACE[watcher]; f.gaze = 'other'; f.gazeUntil = f.gazeLock = G.t + 400; f.mx = f.my = 0; }
+    if (watcher && !(ARC.lookUntil > G.t) && !ARC.dark) { const f = FACE[watcher]; f.gaze = 'other'; f.gazeUntil = f.gazeLock = G.t + 400; f.mx = f.my = 0; }   // (both look at a candle as it dies first; in the blackout the moon's eyes are on them)
   }
   // over a face on a dead candle's side: the board's wood laid back over the printing (so it shows at 0.35), the eye whites gone black
   function drawFaceDark(c, w) {
@@ -2852,6 +3447,7 @@
     for (const k in GLYPHS) delete GLYPHS[k].crk;
     BURN.sun = mkBurn(); BURN.moon = mkBurn(); Object.assign(BURN, { eyes: 0, eyesUntil: 0, grin: false, grins: 0, smoke: 0 });
     EMB.name = 'warm'; EMB.until = 0; evilColour('warm');
+    arcReset();   // the faces' arc starts over with the marks: a stop and the title put every face back where it began
     baseDirty = true;
   }
   // the demon's marks, after its move (the colour was set before it began): a gouge, a split letter, a stain, a burn on the faces. An ending
@@ -2988,6 +3584,7 @@
   }
   // a clip's file: a name in the manifest, or { src, cues: { left: 3.1 } } with cue times in seconds
   function clipSrc(id) {
+    if (id.startsWith('prop:')) return propSrc(id.slice(5));   // a thing on the table (the props package)
     if (id.startsWith('real:')) {
       // the possession's smoke, shot on black (PL.clips.smoke: { smoke: { land, port }, smokeSettle: ..., smokeLine: ... })
       const slot = PL && PL.clips && PL.clips.smoke && PL.clips.smoke[id.slice(5)];
@@ -2997,6 +3594,7 @@
       return list.find((f) => probe.canPlayType(/\.webm$/.test(f) ? 'video/webm' : 'video/mp4')) || '';
     }
     const [kind, name] = id.includes(':') ? id.split(':') : ['table', id];
+    if (kind === 'look') return lookSrc(name);   // the looks package: a file named under PL.looks
     // a board clip can have an upright take of its own (board.port), lit the way the upright table is
     const set = clipSet(kind), e = set && ((kind === 'board' && SC === 'port' && set.port && set.port[name]) || set[name]);
     const f = typeof e === 'string' ? e : e && e.src;
@@ -3054,7 +3652,7 @@
     if (PV.vids.has(id) || !clipKnown(id)) return;
     // room for it: let go of whatever was used longest ago, is not on screen and is not needed next.
     // When everything held is needed, it waits: a later moment asks again.
-    const keep = new Set([PV.cur && PV.cur.id, PV.board && PV.board.id, PV.over && PV.over.id, PLUME.on ? PLUME_ID : null, ...PV.soon]);
+    const keep = new Set([PV.cur && PV.cur.id, PV.board && PV.board.id, PV.over && PV.over.id, PLUME.on ? PLUME_ID : null, ...PV.soon, ...propHeld(), ...lookKeep()]);
     while (PV.vids.size + FF.w.length >= MAX_VID) {   // the flame family's two are permanent: they count
       const old = [...PV.vids.entries()].filter(([k]) => !keep.has(k)).sort((a, b) => a[1].used - b[1].used)[0];
       if (!old) return;
@@ -3111,6 +3709,525 @@
     nlog('cutaway', { place: place || '', clip: clip || '', have: !!still && !!(room && room[clip]) });
     return Promise.resolve(false);
   }
+  // ---------------------------------------------------------------- the reel and the production's new calls (2026-10-08)
+  // REEL: every trick the night can perform, by name, so ?reel (a review page for Pierce: every clip, look, sound, mark and burn, one button each)
+  // can fire it and say what it is. add(name, { group, what, status, fire }): group is 'prop', 'look', 'cut', 'sound', 'mark', 'burn', 'face',
+  // 'house', 'ending'; status is 'live' (plays tonight), 'made' (a file exists, not yet wired), 'missing' (nothing to play), 'idea' (not built);
+  // fire() performs it now, whatever the night is doing. Each package registers its own as it builds (the props and looks packages, the sounds).
+  const REEL = {
+    items: new Map(),
+    add(name, o) { REEL.items.set(name, Object.assign({ name, group: 'house', what: '', status: 'live', fire: null }, o || {})); return name; },
+    list() { return [...REEL.items.values()].map(({ fire, ...r }) => ({ ...r, can: typeof fire === 'function' })); },
+    fire(name, arg) { const it = REEL.items.get(name); if (!it || typeof it.fire !== 'function') return Promise.resolve(false); nlog('reel', { fire: name }); return Promise.resolve(it.fire(arg)); },
+  };
+  // The demon's new calls. Each is a stub until its package lands: it writes what was asked to the night log and draws nothing.
+  //   propPlay(name): a thing on the table misbehaves (DIRECTION.md 13.2): a region clip drawn in its box over the still plate, its sound, its keyframe after.
+  //   lookAt(where): the camera turns (12, 13.3, 13.12): a transit clip off the table, a hold on a still with the live part drawn over it, and back; or a hard cutaway.
+  //   countBeads(n): the abacus counts n (13.12).
+  //   drawProps(cx, f): the props layer, drawn in world space right after the plate's film (the box of the prop that is moving, and the keyframes of those that have).
+  //   drawLook(): the look layer, drawn last in screen space: the whole picture while the camera is away from the table.
+  function propPlay(name) { return propCall(name, 'called'); }   // the props package (below)
+  function lookAt(where, o) { return looksLookAt(where, o); }   // (the looks package, below: looksLookAt)
+  function countBeads(n) { return looksCount(n); }
+  function drawProps(c, f) { propDraw(c, f); }   // the props package (below)
+  function drawLook() { drawLookNow(); }
+  // ---------------------------------------------------------------- the props package (the table's things, 2026-10-08)
+  // DIRECTION.md 13.2. The player sits at the half-cleared supper table, and over the night ordinary things on it do small wrong things, each once.
+  // A film prop is a region clip (places.js PL.props): its take is cut through a soft region (the key PNG's own alpha: where the thing moves,
+  // feathered about 14 plate px) and laid over the still plate in world space, so the candles and the flames never drift; it cross-fades in from
+  // the plate over its first 300 ms and into its key (the plate after it, pixel for pixel) over its last 300 ms, and the key stays for the rest of
+  // the night. Then each moved thing's own pixels (its chg PNG) are laid over everything again, so a later film whose region overlaps it never puts
+  // it back. All of it is drawn before the board and under the room's light, the way the plate is. The flies, the phone and the remote are code.
+  // What has moved tonight is NIGHT.props (with the night's other state); it is kept in storage too, so a reload in the middle of a night shows
+  // the table as it was left, and a night that ends clears it. The demon calls any of them by name (propPlay); the house does two of the
+  // deniable ones on its own (the napkins early, keys or mug between the third and sixth minute: EV 'prop-napkins' and 'prop-house'), and says
+  // so (noteHouse 'prop-<name>'). One film plays at a time (the flame family has two of the four video decoders; a prop uses at most two).
+  const PROP_W = 1376, PROP_H = 768, PROP_FADE = 0.3, PROP_KEEP_MS = 45 * 60000;
+  const PROP_NAMES = ['glass', 'salt', 'napkins', 'fork', 'pen', 'phone', 'remote', 'keys', 'apples', 'mug', 'glasses', 'matches', 'match-strike', 'moth'];
+  const PROPST = {
+    img: new Map(),            // key and chg pictures by file: { im, ok }
+    cur: null,                 // the film playing: { name, e, el, g, a, k, res }
+    hold: new Set(),           // prop videos that must not be let go to make room (one playing, the moth's flight waiting)
+    q: Promise.resolve(),      // films play one at a time, in the order they were asked for
+    off: null, rmask: new Map(),
+    flies: null, phone: null, remote: null, blur: null, rings: [], shakeSeen: 0,
+    wired: false, inited: false, log: [],
+  };
+  const propCfg = (name) => (PL && PL.props && PL.props[name]) || null;
+  const propLive = (name) => { const e = propCfg(name === 'moth' ? 'moth-wake' : name); return !!e && !e.made; };
+  const propHeld = () => [...PROPST.hold];
+  // a clip of the props: 'prop:<name>' is that prop's take (clipSrc asks here)
+  function propSrc(name) { const e = propCfg(name); return e && e.clip ? 'assets/clips/' + PL.id + '/' + e.clip : ''; }
+  // a box on the plate, in world units (the plate is drawn at plateRect: f is its scale)
+  function propRect(b, f) {
+    const x0 = WORLD.w / 2 * (1 - f), y0 = WORLD.h / 2 * (1 - f), kx = (WORLD.w * f) / PROP_W, ky = (WORLD.h * f) / PROP_H;
+    return [x0 + b[0] * kx, y0 + b[1] * ky, (b[2] - b[0]) * kx, (b[3] - b[1]) * ky];
+  }
+  const propWorld = (px, py, f) => { const r = propRect([px, py, px, py], f); return { x: r[0], y: r[1] }; };
+  // where a thing on the plate is heard from: the table is in front of them and below their eyes, about 1.3 m across, its near edge 0.28 m away
+  // and its far edge 1 m (the listener at the origin facing -z; audio.js spot)
+  function propSpot(p) { const px = p ? p[0] : 688, py = p ? p[1] : 384; return { x: +((px / PROP_W - 0.5) * 1.3).toFixed(3), y: -0.45, z: +(-(0.28 + (1 - py / PROP_H) * 0.72)).toFixed(3) }; }
+  function propSound(name, s, pos, over) {
+    if (!s || !s.kind || !A.rec) return 0;
+    const at = Object.assign(propSpot(pos), over || {});
+    A.lastTake = null;
+    const n = A.rec(s.kind, at, s.vol == null ? 0.8 : s.vol) || 0;
+    nlog('propSound', { prop: name, kind: s.kind, ok: n > 0 });
+    if (s.shake) shake(s.shake);
+    return n;
+  }
+  // the house's words for what it did (game.js HOUSE_KEYS; the site says each in a sentence)
+  function propNote(k) { HOUSE_KEYS.add(k); noteHouse(k); }
+  function propImg(path) {
+    if (!path || !PL) return null;
+    let e = PROPST.img.get(path);
+    if (!e) {
+      e = { im: null, ok: false }; PROPST.img.set(path, e);
+      // (laid once onto a canvas of its own, so its first use in a frame is never the picture's decode: that cost 100 ms in WebKit)
+      loadArt('assets/clips/' + PL.id + '/' + path).then((im) => {
+        if (!im) { nlog('propMissing', { file: path }); return; }
+        let c = im;
+        try { c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0); } catch (err) { c = im; }
+        e.im = c; e.ok = true;
+      });
+    }
+    return e.ok ? e.im : null;
+  }
+  // ---- the night's state: what has moved, in the order it moved ({ layer, pending }), and what has been done (once a night each)
+  function propSave() {
+    const st = NIGHT.props; if (!st) return;
+    store.set('props', { at: Date.now(), place: PL ? PL.id : '', order: st.order.map((L) => L.layer), done: Object.keys(st.done) });
+  }
+  // A new night starts the table over. The first night of a page load takes back what a reload left in the middle of a night (a record younger
+  // than 45 minutes; a night that ended cleared it).
+  function propNight() {
+    const first = !PROPST.inited; PROPST.inited = true;
+    propHalt();
+    PROPST.flies = PROPST.phone = PROPST.remote = PROPST.blur = null; PROPST.rings = [];
+    NIGHT.props = { order: [], done: {}, house: 0, pick: '' };
+    if (!first) { store.set('props', null); return; }
+    const r = store.get('props', null);
+    if (!r || !Array.isArray(r.order) || !(Date.now() - (+r.at || 0) < PROP_KEEP_MS) || (PL && r.place !== PL.id)) { if (r) store.set('props', null); return; }
+    r.order.filter((l) => typeof l === 'string' && propCfg(l) && propCfg(l).key).forEach((l) => NIGHT.props.order.push({ layer: l, pending: false }));
+    (Array.isArray(r.done) ? r.done : []).filter((n) => PROP_NAMES.includes(n)).forEach((n) => { NIGHT.props.done[n] = { how: 'kept', t: 0 }; });
+    if (NIGHT.props.order.length) nlog('propKept', { order: r.order });
+  }
+  const propDone = (name) => !!(NIGHT.props && NIGHT.props.done[name]);
+  function propForget(name) {
+    const st = NIGHT.props; if (!st) return;
+    delete st.done[name];
+    const layers = name === 'moth' ? ['moth-wake', 'moth-fly'] : [name];
+    st.order = st.order.filter((L) => !layers.includes(L.layer));
+    if (name === 'apples') PROPST.flies = null;
+    propSave();
+  }
+  // ---- the demon's call (and the house's, and the reel's): a thing on the table misbehaves. true once it has played.
+  function propCall(name, how, o = {}) {
+    name = String(name || ''); how = how || 'called';
+    const key = name === 'moth' ? 'moth-wake' : name, e = propCfg(key);
+    if (!e) { nlog('prop', { prop: name, have: false, how }); return Promise.resolve(false); }
+    if (o.force) propForget(name);
+    if (e.made && !o.review) { nlog('prop', { prop: name, have: false, made: true, how }); return Promise.resolve(false); }
+    if (!o.review) {
+      if (name === 'match-strike' && !propDone('matches')) { nlog('prop', { prop: name, have: true, how, wait: 'matches' }); return Promise.resolve(false); }
+      if (propDone(name)) { nlog('prop', { prop: name, have: true, how, again: true }); return Promise.resolve(false); }
+      NIGHT.props.done[name] = { how, t: Math.round(nightSecs()) }; propSave();   // once a night, from the moment it is asked
+    }
+    nlog('prop', { prop: name, have: true, how });
+    if (e.code) return propCode(name, e).catch(() => false);
+    const run = () => (name === 'moth' ? propMoth(o) : propFilm(name, o));
+    const p = PROPST.q.then(run, run).catch(() => false);
+    PROPST.q = p;
+    return p;
+  }
+  // a video for a prop, loaded and sitting on its first played frame (from): the real seek, never a guessed delay
+  function propVideo(id, e, ms) {
+    return new Promise((res) => {
+      loadClip(id);
+      const v = PV.vids.get(id);
+      if (!v || v.failed) { nlog('propNoVideo', { id, why: v ? 'failed' : 'no room' }); res(null); return; }
+      PROPST.hold.add(id);
+      const el = v.el; let done = false, tries = 0;
+      const fin = (x) => { if (done) return; done = true; clearTimeout(to); el.removeEventListener('seeked', onSeek); el.removeEventListener('error', onErr); if (!x) { PROPST.hold.delete(id); nlog('propNoVideo', { id, why: 'not ready' }); } res(x); };
+      const seek = () => { try { el.currentTime = e.from || 0; } catch (err) { fin(null); } };
+      // the first frame read off a video is the slow one: it is read here, before anything is shown
+      const warm = () => { try { const o = propOff(4, 4).getContext('2d'); o.drawImage(el, 0, 0, 4, 4); } catch (err) { /* fine */ } };
+      const onSeek = () => { if (Math.abs(el.currentTime - (e.from || 0)) < 0.2 && el.readyState >= 2) { warm(); fin(el); } else if (tries++ < 4) seek(); };
+      const onErr = () => fin(null);
+      const to = setTimeout(() => fin(null), ms || 9000);
+      el.addEventListener('seeked', onSeek); el.addEventListener('error', onErr);
+      if (el.readyState >= 1) seek(); else el.addEventListener('loadedmetadata', seek, { once: true });
+    });
+  }
+  // one region film: plays from..to of its take through its region, then its key stays. o.review: a take that is made and not played tonight,
+  // shown once through a plain soft rectangle for the reel, and gone after. o.blur: the moth's flight; the engine takes it to the lens.
+  async function propFilm(name, o = {}) {
+    const e = propCfg(name), id = 'prop:' + name, g = haltGen;
+    if (!e || !e.clip || SC !== 'land' || halt) return false;
+    const st = NIGHT.props, L = { layer: name, pending: true };
+    if (!o.review) { st.order.push(L); propSave(); }
+    propImg(e.key); propImg(e.chg);
+    const el = await propVideo(id, e);
+    // the moth's flight loads while it wakes, if there is a decoder to spare (the possession's smoke may hold the other); if not, it loads after
+    if (el && name === 'moth-wake' && propCfg('moth-fly')) { loadClip('prop:moth-fly'); if (PV.vids.has('prop:moth-fly')) PROPST.hold.add('prop:moth-fly'); }
+    const drop = () => { st.order = st.order.filter((x) => x !== L); propSave(); };
+    if (!el || halt || g !== haltGen) { if (!el) drop(); else { L.pending = false; PROPST.hold.delete(id); } return false; }
+    // the region to cut it through has to be there too (a film with no region draws nothing)
+    for (let i = 0; i < 60 && !o.review && !propImg(e.key); i++) await sleep(50);
+    if (!o.review && !propImg(e.key)) { nlog('propNoKey', { prop: name }); drop(); PROPST.hold.delete(id); return false; }
+    const tone = e.tone || [1, 1, 1];
+    const cur = { name, e, el, g, a: 0, k: 0, review: !!o.review, blur: !!o.blur, cues: [], toneCss: `rgb(${tone.map((v) => Math.round(clamp(v, 0, 1) * 255)).join(',')})`, t0: performance.now() };
+    if (e.sound) cur.cues.push({ t: (e.from || 0) + (e.sound.at || 0), fn: () => propSound(name, e.sound, e.pos) });
+    if (e.sound2) cur.cues.push({ t: (e.from || 0) + (e.sound2.at || 0), fn: () => propSound(name, e.sound2, e.pos) });
+    if (o.blur) cur.cues.push({ t: (e.from || 0) + 0.32, fn: () => propBlurStart(e) });
+    // the water that ran out of the glass reaches the board and soaks along its grain (the marks' own stain, from the glass's side)
+    if (e.stain && !o.review) cur.cues.push({ t: (e.from || 0) + (e.stain.at || 0), fn: () => { if (!halt) { const st0 = fxStain(e.stain.place); nlog('propStain', { prop: name, ok: !!st0 }); } } });
+    cur.cues.sort((a, b) => a.t - b.t);
+    el.loop = false; el.playbackRate = 1;
+    const ended = new Promise((res) => { cur.res = res; });
+    PROPST.cur = cur;
+    try { await el.play(); } catch (err) { nlog('propNoPlay', { prop: name }); PROPST.cur = null; PROPST.hold.delete(id); drop(); return false; }
+    nlog('propFilm', { prop: name, from: e.from, to: e.to, review: !!o.review });
+    cur.safety = setTimeout(() => propEnd(cur), ((e.to - e.from) * 2.2 + 4) * 1000);   // a stalled take never holds the table
+    el.onended = () => propEnd(cur);
+    await ended;
+    if (!o.review) { L.pending = false; propSave(); }
+    return !halt && g === haltGen;
+  }
+  // the film's clock is the take's own currentTime (cues, the fades, the end): read every frame
+  function propTick(cur) {
+    const { e, el } = cur;
+    if (halt || cur.g !== haltGen) { propEnd(cur); return; }
+    const t = el.currentTime || 0, from = e.from || 0, to = e.to;
+    while (cur.cues.length && t >= cur.cues[0].t) cur.cues.shift().fn();
+    cur.a = clamp((t - from) / ((e.fadeIn || PROP_FADE * 1000) / 1000), 0, 1);
+    cur.k = cur.review ? 0 : clamp((t - (to - PROP_FADE)) / PROP_FADE, 0, 1);
+    if (cur.review && t > to - PROP_FADE) cur.a = Math.min(cur.a, clamp((to - t) / PROP_FADE, 0, 1));
+    // a take cut while the thing is still moving slows to a stop over its last 0.6 s instead of stopping dead
+    if (e.ease) { const r = clamp((to - t) / 0.6, 0.25, 1); if (Math.abs(el.playbackRate - r) > 0.04) { try { el.playbackRate = r; } catch (err) { /* fine */ } } }
+    if (t >= to - 0.02) propEnd(cur);
+  }
+  function propEnd(cur) {
+    if (cur.done) return;
+    cur.done = true; clearTimeout(cur.safety); cur.el.onended = null;
+    while (cur.cues.length) { const c = cur.cues.shift(); if (!cur.review && c.fn && !halt) c.fn(); }
+    try { cur.el.pause(); } catch (e) { /* fine */ }
+    if (PROPST.cur === cur) PROPST.cur = null;
+    const id = 'prop:' + cur.name, v = PV.vids.get(id);
+    PROPST.hold.delete(id);
+    if (v) { dropClip(id, v); nlog('propDrop', { id }); }   // each take plays once a night: its decoder goes back (the rest of its download is let go)
+    if (cur.res) cur.res(true);
+  }
+  // a stopped night (a held candle, the title): the film playing ends at once on its key
+  function propHalt() { if (PROPST.cur) propEnd(PROPST.cur); }
+  async function propMoth(o = {}) {
+    const g = haltGen;
+    if (!(await propFilm('moth-wake', o))) { PROPST.hold.delete('prop:moth-fly'); return false; }
+    try { await wait(rnd(500, 900)); } catch (e) { return false; }
+    if (g !== haltGen) return false;
+    const ok = await propFilm('moth-fly', Object.assign({}, o, { blur: true }));
+    if (ok && !o.review) { propNote('moth-gone'); nlog('mothGone'); }
+    return ok;
+  }
+  // ---- the code props
+  function propCode(name, e) {
+    if (e.code === 'flies') return propFlies(name, e);
+    if (e.code === 'phone') return propPhone(name, e);
+    if (e.code === 'remote') return propRemote(name, e);
+    return Promise.resolve(false);
+  }
+  // a dozen flies circle the apples, a buzz; then they leave together for the nearer candle and it gutters (G.gutter, the house's own)
+  async function propFlies(name, e) {
+    const g = haltGen, at = e.at || [1318, 500];
+    const fl = Array.from({ length: 12 }, () => ({ ph: rnd(0, 6.283), w: rnd(2.4, 4.6) * (Math.random() < 0.5 ? -1 : 1), rx: rnd(24, 64), ry: rnd(12, 34), wob: rnd(0, 6.283), lag: rnd(0, 0.45), px: 0, py: 0, hx: null }));
+    let ci = 0;
+    if (FLAMES && FLAMES.length > 1) { const d = FLAMES.map((fm) => Math.hypot(fm.x * PROP_W / WORLD.w - at[0], fm.y * PROP_H / WORLD.h - at[1])); ci = d[1] < d[0] ? 1 : 0; }
+    const F = PROPST.flies = { t0: performance.now(), at, fl, leaveAt: Infinity, ci, a: 0, gone: false };
+    const n = propSound(name, e.sound, e.pos);
+    try {
+      await wait(Math.max(6500, n * 1000 + 600));
+      F.leaveAt = performance.now();
+      await wait(2300);
+      G.gutter = 1; G.gutterWho = F.ci; nlog('propFliesGone', { candle: F.ci });
+      F.gone = true;
+    } catch (err) { if (PROPST.flies === F) PROPST.flies = null; return false; }
+    return g === haltGen;
+  }
+  // the handset's little display lights green and it rings once; the handset buzzes a pixel while it rings
+  async function propPhone(name, e) {
+    const g = haltGen;
+    const P0 = PROPST.phone = { t0: performance.now(), ring: 0, e };
+    const n = propSound(name, e.sound, e.pos);
+    P0.ring = Math.max(1.6, n || 2.4);
+    try { await wait(P0.ring * 1000 + 1500); } catch (err) { PROPST.phone = null; return false; }
+    if (PROPST.phone === P0) PROPST.phone = null;
+    return g === haltGen;
+  }
+  // a click, the red power button glows for a second, and a television comes on in the next room (the living room, to the left)
+  async function propRemote(name, e) {
+    const g = haltGen;
+    const R = PROPST.remote = { t0: performance.now(), e };
+    propSound(name, e.sound, e.pos);
+    try {
+      await wait(520);
+      const n = A.rec ? A.rec('tv-on', { x: -3.3, y: 0.15, z: -2.2, cut: 2400, wet: 0.35 }, 0.75) : 0;
+      nlog('propSound', { prop: name, kind: 'tv-on', ok: n > 0 });
+      await wait(900);
+    } catch (err) { PROPST.remote = null; return false; }
+    if (PROPST.remote === R) PROPST.remote = null;
+    return g === haltGen;
+  }
+  // the moth flies at the lens: a dark soft blur that grows from where it was until it fills the picture, and is gone (code takes the blur)
+  function propBlurStart(e) { const p = e.pos || [1250, 325]; PROPST.blur = { t0: performance.now(), px: p[0], py: p[1], dur: 420, dir: rnd(-0.4, 0.4) }; }
+  // ---- the house's own: two of the deniable ones a night, through the dread engine's gates (EV, runEvent), never one the demon already called
+  const propEyesOff = () => { try { return typing() || !document.hasFocus(); } catch (e) { return false; } };
+  function propHousePick() {
+    const st = NIGHT.props; if (!st) return '';
+    if (st.pick && !propDone(st.pick)) return st.pick;
+    const l = ['keys', 'mug', 'salt'].filter((n) => propLive(n) && !propDone(n));
+    st.pick = l.length ? pick(l) : '';
+    return st.pick;
+  }
+  function propHouse(name) {
+    if (!name || propDone(name) || !propLive(name) || halt) return Promise.resolve(false);
+    NIGHT.props.house++;
+    propNote('prop-' + name);
+    return propCall(name, 'house');
+  }
+  // wired the first time the table is drawn (EV, EVENTS and lookKey are made further down the file)
+  function propWire() {
+    if (PROPST.wired) return;
+    PROPST.wired = true;
+    // every key and its moved part, fetched one at a time in the background, so a film never waits for its own key
+    const files = Object.values((PL && PL.props) || {}).flatMap((e) => [e.key, e.chg]).filter(Boolean);
+    files.forEach((f, i) => setTimeout(() => propImg(f), 1500 + i * 250));
+    EV['prop-napkins'] = { d: 0, cd: 1e6, w: 2.6, small: true, ok: () => propLive('napkins') && !propDone('napkins') && NIGHT.props.house < 2 && nightSecs() < 240 && propEyesOff() };
+    EV['prop-house'] = { d: 1, cd: 1e6, w: 1.8, small: true, ok: () => { const s = nightSecs(); return s >= 180 && s <= 360 && NIGHT.props.house < 2 && !!propHousePick(); } };
+    lookKey['prop-napkins'] = null; lookKey['prop-house'] = null;
+    EVENTS['prop-napkins'] = () => propHouse('napkins');
+    EVENTS['prop-house'] = () => propHouse(propHousePick());
+  }
+  // ---- drawing (world space, after the plate's film, before the board)
+  function propOff(w, h) {
+    let o = PROPST.off;
+    if (!o) o = PROPST.off = document.createElement('canvas');
+    if (o.width < w || o.height < h) { o.width = Math.max(o.width, w); o.height = Math.max(o.height, h); }
+    return o;
+  }
+  // the reel's plain soft rectangle (a take with no region of its own)
+  function propRectMask(w, h) {
+    const k = w + 'x' + h; let m = PROPST.rmask.get(k);
+    if (m) return m;
+    m = document.createElement('canvas'); m.width = w; m.height = h;
+    const c = m.getContext('2d'), r = Math.max(8, Math.min(w, h) * 0.08);
+    c.filter = 'none'; c.fillStyle = '#fff';
+    for (let i = 0; i < 8; i++) { c.globalAlpha = 0.125; const d = (r * i) / 8; c.fillRect(d, d, w - 2 * d, h - 2 * d); }
+    PROPST.rmask.set(k, m);
+    return m;
+  }
+  function propFilmDraw(c, f, cur) {
+    const { e, el } = cur;
+    if (!(el.readyState >= 2) || cur.a <= 0.002) return;
+    const b = e.box, reg = e.reg || [PROP_W ? 1920 / PROP_W : 1, 0, 1080 / PROP_H, 0], vw = el.videoWidth || 1920, vh = el.videoHeight || 1080;
+    const ow = Math.max(1, Math.ceil((b[2] - b[0]) * reg[0])), oh = Math.max(1, Math.ceil((b[3] - b[1]) * reg[2]));
+    const mask = propImg(e.key) || (cur.review ? propRectMask(ow, oh) : null);
+    if (!mask) return;
+    // the take's pixels for the box (its source rectangle kept inside the frame: WebKit draws nothing for one that runs past it)
+    let sx = b[0] * reg[0] + reg[1], sy = b[1] * reg[2] + reg[3], sw = ow, sh = oh, dx = 0, dy = 0;
+    if (sx < 0) { dx = -sx; sw += sx; sx = 0; }
+    if (sy < 0) { dy = -sy; sh += sy; sy = 0; }
+    sw = Math.min(sw, vw - sx); sh = Math.min(sh, vh - sy);
+    if (sw < 1 || sh < 1) return;
+    const o = propOff(ow, oh), g = o.getContext('2d');
+    const T = PROPST.prof, t0 = T ? performance.now() : 0;
+    // the take runs at 24 frames a second and the screen at 60: its picture is cut out again only when the take shows a new frame
+    const vt = el.currentTime;
+    if (PROPST.offFor !== cur || cur.offT !== vt) {
+      PROPST.offFor = cur; cur.offT = vt;
+      g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1;
+      g.globalCompositeOperation = 'copy';
+      try { g.drawImage(el, sx, sy, sw, sh, dx, dy, sw, sh); } catch (err) { PROPST.offFor = null; return; }
+      if (dx || dy || sw < ow || sh < oh) { g.globalCompositeOperation = 'destination-over'; g.fillStyle = '#000'; g.fillRect(0, 0, ow, oh); }
+      g.globalCompositeOperation = 'multiply'; g.fillStyle = cur.toneCss; g.fillRect(0, 0, ow, oh);
+      g.globalCompositeOperation = 'destination-in'; g.drawImage(mask, 0, 0, ow, oh);
+      g.globalCompositeOperation = 'source-over';
+    }
+    const t1 = T ? performance.now() : 0;
+    const t2 = t1;
+    const r = propRect(b, f);
+    c.save();
+    c.globalAlpha = cur.a; c.drawImage(o, 0, 0, ow, oh, r[0], r[1], r[2], r[3]);
+    if (T) { const t3 = performance.now(); T.push([+(t1 - t0).toFixed(2), +(t2 - t1).toFixed(2), +(t3 - t2).toFixed(2)]); }
+    if (cur.k > 0 && propImg(e.key)) { c.globalAlpha = cur.k; c.drawImage(propImg(e.key), r[0], r[1], r[2], r[3]); }
+    c.restore();
+  }
+  function propKeyDraw(c, f, layer, chg) {
+    const e = propCfg(layer); if (!e) return;
+    const im = propImg(chg ? e.chg : e.key), b = chg ? e.chgBox : e.box;
+    if (!im || !b) return;
+    const r = propRect(b, f);
+    c.drawImage(im, r[0], r[1], r[2], r[3]);
+  }
+  function propFliesDraw(c, f) {
+    const F = PROPST.flies; if (!F || F.gone) return;
+    const now = performance.now(), t = (now - F.t0) / 1000, lv = F.leaveAt === Infinity ? -1 : (now - F.leaveAt) / 2300;
+    F.a = Math.min(1, t / 1.2);
+    const tgt = FLAMES && FLAMES[F.ci] ? plateMap(FLAMES[F.ci]) : null, ctr = propWorld(F.at[0], F.at[1], f);
+    const kx = (WORLD.w * f) / PROP_W, ky = (WORLD.h * f) / PROP_H;
+    c.save(); c.lineCap = 'round';
+    for (const q of F.fl) {
+      const a = q.ph + q.w * t, wob = Math.sin(t * 7 + q.wob) * 4;
+      let x = ctr.x + (Math.cos(a) * q.rx + wob) * kx, y = ctr.y + (Math.sin(a) * q.ry + Math.cos(t * 5 + q.wob) * 3) * ky - 10 * ky;
+      if (lv >= 0 && tgt) {
+        const k = clamp((lv - q.lag) / (1 - q.lag), 0, 1), s = k * k * (3 - 2 * k);
+        if (q.hx == null) { q.hx = x; q.hy = y; }
+        const mx = (q.hx + tgt.x) / 2, my = Math.min(q.hy, tgt.y) - 40 * ky;
+        x = (1 - s) * (1 - s) * x + 2 * (1 - s) * s * mx + s * s * tgt.x + (1 - s) * Math.sin(t * 9 + q.wob) * 3 * kx;
+        y = (1 - s) * (1 - s) * y + 2 * (1 - s) * s * my + s * s * (tgt.y - 6 * ky);
+        if (k >= 1) continue;
+      }
+      const vx = x - (q.px || x), vy = y - (q.py || y); q.px = x; q.py = y;
+      const sz = 1.7 * kx;
+      c.globalAlpha = 0.9 * F.a;
+      c.strokeStyle = 'rgba(14,11,9,1)'; c.lineWidth = sz * 1.5;
+      c.beginPath(); c.moveTo(x - vx * 0.6, y - vy * 0.6); c.lineTo(x, y); c.stroke();
+      c.globalAlpha = 0.32 * F.a; c.fillStyle = 'rgba(225,215,195,1)';   // the wings catch the candle
+      c.beginPath(); c.ellipse(x, y - sz * 0.6, sz * 1.2, sz * 0.55, Math.sin(t * 60 + q.wob) * 0.6, 0, 6.283); c.fill();
+    }
+    c.restore();
+  }
+  // the handset buzzing: its own patch of the photo, a pixel this way and that, while it rings
+  function propPhoneDraw(c, f) {
+    const P0 = PROPST.phone, im = wideTable(); if (!P0 || !im) return;
+    const t = (performance.now() - P0.t0) / 1000; if (t > P0.ring) return;
+    const b = P0.e.box, r = propRect(b, f), j = (Math.floor(t * 30) % 2 ? 1 : -1) * 0.7 * (WORLD.w * f) / PROP_W;
+    const iw = im.naturalWidth || im.width || PROP_W, ih = im.naturalHeight || im.height || PROP_H, sx = iw / PROP_W, sy = ih / PROP_H;
+    try { c.drawImage(im, b[0] * sx, b[1] * sy, (b[2] - b[0]) * sx, (b[3] - b[1]) * sy, r[0] + j, r[1] + j * 0.4, r[2], r[3]); } catch (err) { /* fine */ }
+  }
+  // the water in the glass rings with every shake of the picture (the shake's own events), until the glass goes over
+  function propRingsDraw(c, f) {
+    const e = propCfg('glass'); if (!e || !e.water || propDone('glass')) { PROPST.rings.length = 0; return; }
+    const n = SK.ev.length ? SK.ev[SK.ev.length - 1].at : 0;
+    if (n && n !== PROPST.shakeSeen) { PROPST.shakeSeen = n; const last = SK.ev[SK.ev.length - 1]; PROPST.rings.push({ t0: Math.max(performance.now(), last.at), px: last.px }); if (PROPST.rings.length > 6) PROPST.rings.shift(); }
+    if (!PROPST.rings.length) return;
+    const now = performance.now(), w = e.water, ctr = propWorld(w.x, w.y, f), kx = (WORLD.w * f) / PROP_W, ky = (WORLD.h * f) / PROP_H;
+    c.save();
+    c.beginPath(); c.ellipse(ctr.x, ctr.y, w.rx * kx, w.ry * ky, 0, 0, 6.283); c.clip();
+    c.globalCompositeOperation = 'screen'; c.strokeStyle = 'rgba(255,236,210,1)'; c.lineWidth = 0.8 * kx;
+    PROPST.rings = PROPST.rings.filter((r) => now - r.t0 < 1400);
+    for (const r of PROPST.rings) {
+      const k = (now - r.t0) / 1400; if (k < 0) continue;
+      for (let i = 0; i < 3; i++) {
+        const kk = k * 1.25 - i * 0.18; if (kk <= 0 || kk >= 1) continue;
+        c.globalAlpha = 0.22 * (1 - kk) * Math.min(1, r.px / 2);
+        c.beginPath(); c.ellipse(ctr.x, ctr.y, w.rx * kx * kk, w.ry * ky * kk, 0, 0, 6.283); c.stroke();
+      }
+    }
+    c.restore();
+  }
+  // the props layer: the keys of what has moved, the film that is playing, each moved thing again on top, the flies, the buzz, the water
+  function propDraw(c, f) {
+    if (!PL || !PL.props || SC !== 'land' || !NIGHT.props) return;
+    propWire();
+    const st = NIGHT.props, cur = PROPST.cur;
+    for (const L of st.order) if (!L.pending) propKeyDraw(c, f, L.layer, false);
+    if (cur) { propTick(cur); if (PROPST.cur === cur) propFilmDraw(c, f, cur); }
+    if (cur || st.order.length > 1) for (const L of st.order) if (!L.pending) propKeyDraw(c, f, L.layer, true);
+    propRingsDraw(c, f);
+    propPhoneDraw(c, f);
+    propFliesDraw(c, f);
+  }
+  // light, drawn after the room's light (screen space): the phone's display, the remote's button, and the moth at the lens
+  function drawPropsLit() {
+    if (SC !== 'land' || (!PROPST.phone && !PROPST.remote && !PROPST.blur)) return;
+    const f = plateScale(), now = performance.now();
+    const scr = (px, py) => { const w = propWorld(px, py, f), p = worldToScreen(w.x, w.y); return [p.x * DPR, p.y * DPR]; };
+    const u = CAM.s * DPR * (WORLD.w * f) / PROP_W;   // device px per plate px
+    cx.save(); cx.setTransform(1, 0, 0, 1, 0, 0);
+    const P0 = PROPST.phone;
+    if (P0) {
+      const t = (now - P0.t0) / 1000, a = clamp(t / 0.15, 0, 1) * clamp((P0.ring + 1.2 - t) / 0.6, 0, 1);
+      if (a > 0.01) {
+        const pts = P0.e.display.map(([x, y]) => scr(x, y)), mx = pts.reduce((s, p) => s + p[0], 0) / 4, my = pts.reduce((s, p) => s + p[1], 0) / 4;
+        cx.globalCompositeOperation = 'lighter';
+        const gl = cx.createRadialGradient(mx, my, 0, mx, my, 60 * u);
+        gl.addColorStop(0, `rgba(90,150,80,${0.22 * a})`); gl.addColorStop(1, 'rgba(90,150,80,0)');
+        cx.fillStyle = gl; cx.fillRect(mx - 60 * u, my - 60 * u, 120 * u, 120 * u);
+        cx.fillStyle = `rgba(150,205,120,${0.36 * a})`;
+        cx.beginPath(); pts.forEach((p, i) => (i ? cx.lineTo(p[0], p[1]) : cx.moveTo(p[0], p[1]))); cx.closePath(); cx.fill();
+      }
+    }
+    const R = PROPST.remote;
+    if (R) {
+      const t = (now - R.t0) / 1000, a = clamp(t / 0.06, 0, 1) * clamp((1.3 - t) / 0.3, 0, 1);
+      if (a > 0.01) {
+        const [bx, by, br] = R.e.button, p = scr(bx, by), r = br * u;
+        cx.globalCompositeOperation = 'lighter';
+        const gl = cx.createRadialGradient(p[0], p[1], 0, p[0], p[1], r * 3.2);
+        gl.addColorStop(0, `rgba(255,60,40,${0.75 * a})`); gl.addColorStop(0.3, `rgba(220,30,20,${0.45 * a})`); gl.addColorStop(1, 'rgba(200,20,10,0)');
+        cx.fillStyle = gl; cx.fillRect(p[0] - r * 3.2, p[1] - r * 3.2, r * 6.4, r * 6.4);
+      }
+    }
+    const B = PROPST.blur;
+    if (B) {
+      const k = (now - B.t0) / B.dur;
+      if (k >= 1) PROPST.blur = null;
+      else if (k > 0) {
+        const p0 = scr(B.px, B.py), ex = W * DPR * (0.5 + B.dir * 0.3), ey = H * DPR * 0.55, s = k * k;
+        const x = lerp(p0[0], ex, s), y = lerp(p0[1], ey, s), r = lerp(14 * u, Math.max(W, H) * DPR * 0.9, s * s), a = Math.min(1, k * 4) * (k < 0.82 ? 0.9 : 0.9 * (1 - k) / 0.18);
+        cx.globalCompositeOperation = 'source-over';
+        const gl = cx.createRadialGradient(x, y, 0, x, y, r);
+        gl.addColorStop(0, `rgba(26,19,14,${a})`); gl.addColorStop(0.55, `rgba(30,22,16,${a * 0.8})`); gl.addColorStop(1, 'rgba(30,22,16,0)');
+        cx.fillStyle = gl; cx.fillRect(x - r, y - r, r * 2, r * 2);
+      }
+    }
+    cx.restore();
+  }
+  // ---- the reel: every prop, live or not, and what it is
+  PROP_NAMES.filter((n) => n !== 'moth').concat(['moth-wake', 'moth-fly']).forEach((n) => {
+    const e = propCfg(n);
+    const status = !e ? 'idea' : e.made ? 'made' : 'live';
+    const what = {
+      glass: 'the water glass tips over with nothing touching it and rolls toward the board, cracked; the picture jumps 4 px', salt: 'the salt shaker tips over and salt runs toward the board',
+      napkins: 'a breath lifts the top napkin and the next slides half out', fork: 'the fork turns on the plate with a scrape', pen: 'the pen rolls off across the planks',
+      phone: 'the cordless handset\'s display lights green and it rings once', remote: 'the remote\'s red button glows and a television comes on in the next room',
+      keys: 'the ring of keys slides toward the board with a jingle', apples: 'flies circle the apples, then leave for the nearer candle and it gutters',
+      mug: 'the cold mug turns until its handle points at the player', glasses: 'the folded glasses open their arms as if put on a face that is not there',
+      matches: 'the matches roll into a line pointing at the player', 'match-strike': 'the burnt match flares by itself for a second',
+      'moth-wake': 'the moth wakes, spreads its wings and turns', 'moth-fly': 'the moth lifts and flies at the lens, and is gone for the night',
+    }[n] + (e && e.made ? ' (not played tonight: ' + e.made + ')' : '');
+    REEL.add('prop:' + n, { group: 'prop', what, status, fire: () => {
+      if (n === 'moth-wake' || n === 'moth-fly') { propForget('moth'); const run = () => propFilm(n, n === 'moth-fly' ? { blur: true } : {}).then((ok) => { if (ok && n === 'moth-fly') propNote('moth-gone'); return ok; }); const p = PROPST.q.then(run, run).catch(() => false); PROPST.q = p; return p; }
+      return propCall(n, 'reel', e && e.made ? { review: true } : { force: true });
+    } });
+  });
+  REEL.add('prop:water', { group: 'prop', what: 'the water in the glass rings with every shake of the picture (until the glass goes over)', status: propCfg('glass') && propCfg('glass').water ? 'live' : 'idea', fire: () => { if (propDone('glass')) return false; shake('glass-break', { px: 1 }); return true; } });
+  // a test's look (GOODBYE.props)
+  const PROPAPI = {
+    get cfg() { return PL && PL.props; }, names: PROP_NAMES, call: propCall,
+    state() { const st = NIGHT.props || { order: [], done: {} }; return { order: st.order.map((L) => ({ layer: L.layer, pending: L.pending })), done: Object.assign({}, st.done), house: st.house || 0, playing: PROPST.cur ? PROPST.cur.name : '', t: PROPST.cur ? +(PROPST.cur.el.currentTime || 0).toFixed(3) : 0, a: PROPST.cur ? PROPST.cur.a : 0, k: PROPST.cur ? PROPST.cur.k : 0, flies: !!(PROPST.flies && !PROPST.flies.gone), phone: !!PROPST.phone, remote: !!PROPST.remote, blur: !!PROPST.blur, hold: [...PROPST.hold] }; },
+    // the props layer alone, on the plate (no light, no grain, no flames): plate px, for a pixel check. Returns a canvas.
+    layer() {
+      const o = document.createElement('canvas'); o.width = PROP_W; o.height = PROP_H;
+      const c = o.getContext('2d'); if (IMG.plate) c.drawImage(IMG.plate, 0, 0, PROP_W, PROP_H);
+      c.setTransform(PROP_W / WORLD.w, 0, 0, PROP_H / WORLD.h, 0, 0);
+      const cur = PROPST.cur, st = NIGHT.props;
+      if (st) {
+        for (const L of st.order) if (!L.pending) propKeyDraw(c, 1, L.layer, false);
+        if (cur) propFilmDraw(c, 1, cur);
+        for (const L of st.order) if (!L.pending) propKeyDraw(c, 1, L.layer, true);
+        propFliesDraw(c, 1);
+      }
+      return o;
+    },
+    // the boxes on the plate, and the board on the plate (from the board's own rectangle)
+    boxes() { const out = {}; for (const [k, e] of Object.entries((PL && PL.props) || {})) if (e.box) out[k] = e.box.slice(); return out; },
+    boardOnPlate() { return [(BOARD.cx - BOARD.w / 2) * PROP_W / WORLD.w, (BOARD.cy - BOARD.h / 2) * PROP_H / WORLD.h, (BOARD.cx + BOARD.w / 2) * PROP_W / WORLD.w, (BOARD.cy + BOARD.h / 2) * PROP_H / WORLD.h]; },
+    plateToScreen(px, py) { const w = propWorld(px, py, plateScale()); return worldToScreen(w.x, w.y); },
+    spot: propSpot, reset() { propHalt(); Object.keys((NIGHT.props && NIGHT.props.done) || {}).forEach(propForget); PROPST.flies = PROPST.phone = PROPST.remote = PROPST.blur = null; store.set('props', null); },
+    house: (n) => propHouse(n || propHousePick()), pick: propHousePick, wire: propWire,
+    prof(on) { if (on !== undefined) PROPST.prof = on ? [] : null; return PROPST.prof; },
+  };
   function playPlateNow(id, extra) {
     const def = CLIP_DEF[id];
     if (FF.want) return Promise.resolve(false);   // the flame family has the candles: the engine's own way, with its flames
@@ -4003,9 +5120,10 @@
     SC = port ? 'port' : 'land';
     WORLD.w = port ? d.world.w : 1600; WORLD.h = port ? d.world.h : 900;
     Object.assign(BOARD, d.boardRect); BOARD.s = BOARD.w / 1200;
+    Object.assign(FRAME, d.frameRect || d.boardRect);
     PLATE.candles = d.candles; FLAMES = d.flames || null;
     plateOut = null; plateOutSrc = null; plateTex = null;
-    CAM.x = BOARD.cx; CAM.y = BOARD.cy; camSnap = true; dockH = 0;
+    CAM.x = FRAME.cx; CAM.y = FRAME.cy; camSnap = true; dockH = 0;
     document.body.dataset.scene = SC;
   }
   function layout() {
@@ -4064,11 +5182,11 @@
     let s, cy, cxw;
     if (narrow) {
       const band = H - uiTop() - uiBottom();
-      s = Math.min((W * 1.2) / BOARD.w, band / (BOARD.h + 20));
-      cy = BOARD.cy - (uiTop() + band / 2 - H / 2) / s;
+      s = Math.min((W * 1.2) / FRAME.w, band / (FRAME.h + 20));
+      cy = FRAME.cy - (uiTop() + band / 2 - H / 2) / s;
       const half = W / (2 * s);
       const px = BOARD.cx + P.x * BOARD.s;
-      const lo = BOARD.cx - BOARD.w / 2 + half - 30, hi = BOARD.cx + BOARD.w / 2 - half + 30;
+      const lo = FRAME.cx - FRAME.w / 2 + half - 30, hi = FRAME.cx + FRAME.w / 2 - half + 30;
       cxw = lerp(CAM.x, clamp(px, Math.min(lo, hi), Math.max(lo, hi)), 1 - Math.exp(-dt * 3));
       CAM.s = s; CAM.y = cy; CAM.x = cxw;
     } else {
@@ -4077,33 +5195,33 @@
         // With the keyboard up: the candles and the board if the board would still be at least 85% of the width, otherwise the board
         // alone (its candles off the top, their light still on it), width first and centred, standing right on the box. The
         // keyboard never makes the board small and never cuts its top off.
-        const top = flameTop(), boardBot = BOARD.cy + BOARD.h / 2, bot = boardBot + 8;
-        const sBoth = Math.max(0.05, Math.min((bw - 14) / BOARD.w, band / (bot - top)));
-        if (sBoth * BOARD.w >= 0.85 * bw) s = sBoth;
-        else s = Math.max(0.05, Math.min((bw - 14) / BOARD.w, band / (BOARD.h + 2)));
+        const top = flameTop(), boardBot = FRAME.cy + FRAME.h / 2, bot = boardBot + 8;
+        const sBoth = Math.max(0.05, Math.min((bw - 14) / FRAME.w, band / (bot - top)));
+        if (sBoth * FRAME.w >= 0.85 * bw) s = sBoth;
+        else s = Math.max(0.05, Math.min((bw - 14) / FRAME.w, band / (FRAME.h + 2)));
         // the board's bottom edge on the bottom of the stage; horizontally the board's own middle on the visible middle
         cy = boardBot - (st.y1 - H / 2) / s;
-        cxw = BOARD.cx - ((st.x0 + st.x1) / 2 - W / 2) / s;
+        cxw = FRAME.cx - ((st.x0 + st.x1) / 2 - W / 2) / s;
       } else if (SC === 'port') {
         // both candles burning at the top, the board as wide as the screen allows under them
-        const top = flameTop(), bot = BOARD.cy + BOARD.h / 2 + 8;
-        s = Math.max(0.05, Math.min((bw - 14) / BOARD.w, band / (bot - top)));
+        const top = flameTop(), bot = FRAME.cy + FRAME.h / 2 + 8;
+        s = Math.max(0.05, Math.min((bw - 14) / FRAME.w, band / (bot - top)));
         // centred, as on a wide screen: the board's middle on the stage's middle, and the board gives way (by a tenth at most) until both
         // flames, tilted tips and all, stand whole across the stage. (It used to slide toward the candles: 9 px off on a 15 Pro.)
         if (FLAMES) {
-          const ext = Math.max(...FLAMES.map((fl) => { const tip = fl.x + fl.len * 1.15 * Math.sin(fl.tilt); return Math.max(BOARD.cx - Math.min(fl.x, tip), Math.max(fl.x, tip) - BOARD.cx) + 8; }));
+          const ext = Math.max(...FLAMES.map((fl) => { const tip = fl.x + fl.len * 1.15 * Math.sin(fl.tilt); return Math.max(FRAME.cx - Math.min(fl.x, tip), Math.max(fl.x, tip) - FRAME.cx) + 8; }));
           s = Math.max(s * 0.9, Math.min(s, (bw / 2 - 6) / ext));
         }
         const extra = Math.max(0, band - (bot - top) * s);
         const yTop = st.y0 + extra * 0.3;
         cy = top - (yTop - H / 2) / s;
-        cxw = BOARD.cx - ((st.x0 + st.x1) / 2 - W / 2) / s;
+        cxw = FRAME.cx - ((st.x0 + st.x1) / 2 - W / 2) / s;
       } else if (short) {
         // the board and the left candle fit beside the cards; the right candle burns above them.
         // Both flames stay under the pills: the stack from the flame tips (as they lean) down to the board fits.
         // The plate never grows here (plateScale), so the candles stay where the fit put them.
-        const xl = Math.min(...PLATE.candles.map((k) => k.x)) - 60, xr = BOARD.cx + BOARD.w / 2 + 20, bot = BOARD.cy + BOARD.h / 2 + 12;
-        const top = Math.min(BOARD.cy - BOARD.h / 2 - 12, FLAMES
+        const xl = Math.min(...PLATE.candles.map((k) => k.x)) - 60, xr = FRAME.cx + FRAME.w / 2 + 20, bot = FRAME.cy + FRAME.h / 2 + 12;
+        const top = Math.min(FRAME.cy - FRAME.h / 2 - 12, FLAMES
           ? Math.min(...FLAMES.map((fl) => fl.y - fl.len * 1.2 * Math.cos(fl.tilt))) - 8
           : Math.min(...PLATE.candles.map((k) => k.y)) - 40);
         s = Math.max(0.05, Math.min(bw / (xr - xl), band / (bot - top)));
@@ -4111,19 +5229,19 @@
         cy = top - (st.y0 + extra / 2 - H / 2) / s;
         cxw = (xl + xr) / 2 - ((st.x0 + st.x1) / 2 - W / 2) / s;
       } else {
-        s = Math.min((W - 48) / (BOARD.w + 60), band / (BOARD.h + 110));
+        s = Math.min((W - 48) / (FRAME.w + 60), band / (FRAME.h + 110));
         // a candle standing high in the photo: the board gives up a little size (never more than 15%) so its flame
         // clears the pills. The flame tops are measured where the plate puts them (it grows to fill a wide screen).
         if (FLAMES) {
-          const s0 = s, bot = BOARD.cy + BOARD.h / 2;
+          const s0 = s, bot = FRAME.cy + FRAME.h / 2;
           // past the size where the photo has to grow to fill the screen, shrinking only pushes the candles further out
-          const fill = Math.max(H * 1.02 / WORLD.h, W * 1.02 / Math.max(1, WORLD.w - 2 * Math.abs(BOARD.cx - WORLD.w / 2)));
+          const fill = Math.max(H * 1.02 / WORLD.h, W * 1.02 / Math.max(1, WORLD.w - 2 * Math.abs(FRAME.cx - WORLD.w / 2)));
           for (let n = 0; n < 3; n++) s = Math.max(s0 * 0.85, Math.min(s0, Math.max(fill, (st.y1 - st.y0 + 4) / (bot - flameTip(s, wideX(s))))));
         }
         // Centred (Pierce, 2026-10-04: "this doesnt feel centered"): the board's middle is the screen's middle, and the two dishes stand the same
         // distance either side of it (they do, on the photo: 502 and 513 units). The board gives way in size until both flames, tilted tips and
         // all, stand whole on the screen. Only a screen too square for that falls back to sliding the table toward the candles.
-        cxw = BOARD.cx;
+        cxw = FRAME.cx;
         if (FLAMES) { const fit = centredScale(s, st); if (fit > 0) s = fit; else cxw = wideX(s); }
         cy = wideCy(s, st, cxw);
       }
@@ -4153,8 +5271,8 @@
   // Where the camera looks (world y) at scale s on a wide screen, before the flames have a say: the board's middle on the screen's middle,
   // unless that would sink it into the cards under it (they start at the stage's bottom).
   function wideCy0(s) {
-    const st = stage(), bot = (BOARD.h / 2) * s + H / 2, room = st.y1 + 30;
-    return bot > room ? BOARD.cy + (bot - room) / s : BOARD.cy;
+    const st = stage(), bot = (FRAME.h / 2) * s + H / 2, room = st.y1 + 30;
+    return bot > room ? FRAME.cy + (bot - room) / s : FRAME.cy;
   }
   // The camera's y, all told. The board's middle is the screen's middle (Pierce, 2026-10-04: "this doesnt feel centered"). A flame that would
   // burn within 24px of the top edge comes down, as far as the room under the board allows (the pills are gone all night). And never so high that the top of the screen shows
@@ -4165,7 +5283,7 @@
     if (FLAMES) {
       const tip = flameTip(s, x);
       // the board may sink into the margin above the cards (they start about 40px under the band)
-      const need = 24 - ((tip - cy) * s + H / 2), room = st.y1 + 30 - ((BOARD.cy + BOARD.h / 2 - cy) * s + H / 2);
+      const need = 24 - ((tip - cy) * s + H / 2), room = st.y1 + 30 - ((FRAME.cy + FRAME.h / 2 - cy) * s + H / 2);
       if (need > 0 && room > 0) cy -= Math.min(need, room) / s;
     }
     const top = (0.5 - PLATE_TOP) * H / s + 6 / s;
@@ -4175,8 +5293,8 @@
   // The scale, at or under s0 (and over 80% of it), at which the board is centred and both flames are whole on the screen; 0 if there is none.
   function centredScale(s0, st) {
     const fits = (s) => {
-      const f = plateScaleFor(s, BOARD.cx, wideCy(s, st, BOARD.cx)), m = Math.max(10, W * 0.01);
-      const sx = (x) => (WORLD.w / 2 + (x - WORLD.w / 2) * f - BOARD.cx) * s + W / 2;
+      const f = plateScaleFor(s, FRAME.cx, wideCy(s, st, FRAME.cx)), m = Math.max(10, W * 0.01);
+      const sx = (x) => (WORLD.w / 2 + (x - WORLD.w / 2) * f - FRAME.cx) * s + W / 2;
       return FLAMES.every((fl) => { const a = sx(fl.x), b = sx(fl.x + fl.len * 1.15 * Math.sin(fl.tilt)); return Math.min(a, b) >= m && Math.max(a, b) <= W - m; });
     };
     if (fits(s0)) return s0;
@@ -4192,18 +5310,18 @@
   }
   // Upright (port) the same rule runs on the stage's width; the photo never grows there, its edges fade instead.
   function wideX(s, port) {
-    if (!FLAMES) return BOARD.cx;
+    if (!FLAMES) return FRAME.cx;
     const span = port ? stage().x1 - stage().x0 : W;
     const half = span / (2 * s), m = (port ? 6 : 20) / s, slack = port ? Infinity : (WORLD.w / 1.02 - W / s) / 2;
-    if (slack <= 0) return BOARD.cx;   // the photo already grows to fill this screen
+    if (slack <= 0) return FRAME.cx;   // the photo already grows to fill this screen
     let lo = -Infinity, hi = Infinity;
     FLAMES.forEach((f) => {
       const tip = f.x + f.len * 1.15 * Math.sin(f.tilt), l = Math.min(f.x, tip) - 8, r = Math.max(f.x, tip) + 8;
       lo = Math.max(lo, r + m - half); hi = Math.min(hi, l - m + half);
     });
-    let x = lo <= hi ? clamp(BOARD.cx, lo, hi) : (lo + hi) / 2;
+    let x = lo <= hi ? clamp(FRAME.cx, lo, hi) : (lo + hi) / 2;
     x = clamp(x, WORLD.w / 2 - slack, WORLD.w / 2 + slack);
-    const pad = 16 / s, bl = BOARD.cx - BOARD.w / 2 - pad, br = BOARD.cx + BOARD.w / 2 + pad;
+    const pad = 16 / s, bl = FRAME.cx - FRAME.w / 2 - pad, br = FRAME.cx + FRAME.w / 2 + pad;
     return clamp(x, Math.min(br - half, bl + half), Math.max(br - half, bl + half));
   }
   // Upright, the transcript sits just under the board; on its side, between the pills at the top.
@@ -4342,6 +5460,7 @@
     // (with a flame family the candles are its films, so the table stays the still: no table clip, no key still)
     const film = FF.want ? null : PV.cur && PV.cur.el.readyState >= 2 ? PV.cur.el : PV.keys[PV.key] || null;
     if (film) { try { cx.drawImage(film, ...plateRect(film, f)); } catch (e) { /* a frame not ready yet */ } }
+    perf('props', () => drawProps(cx, f));   // the things on the table that are moving or have moved (the props package), over the still, under the board
     // Upright and on its side the photo never grows, so a smaller board (the keyboard is up, a wide short screen)
     // can leave it smaller than the screen: its straight edges fade into the dark instead of showing as hard lines. On the wide table
     // only the bottom can run short (plateScaleFor), and the same fade takes it into the dark.
@@ -4408,9 +5527,15 @@
     if (BYE.strike) strikeLine(cx, GLYPHS.NO, clamp((G.t - BYE.strike.t0) / 200, 0, 1));
     // the faces are drawn as they always were; the evil state is laid behind them (the glow) and over them (the warmed ink, the embers)
     perf('faces', () => {
-      drawEvilGlow(cx); drawFace(cx, 'sun'); drawFace(cx, 'moon');
-      drawFaceDark(cx, 'sun'); drawFaceDark(cx, 'moon');   // a face on a dead candle's side, faded to a silhouette (13.8)
-      drawEvilFace(cx, 'sun'); drawEvilFace(cx, 'moon');
+      drawEvilGlow(cx);
+      // (the sun's rays turn on G.t inside drawFace, and stand while the faces sleep: the face is drawn with the time it has been awake for)
+      const tReal = G.t; G.t = tReal - ARC.rayLag;
+      try {
+        drawFace(cx, 'sun'); drawFace(cx, 'moon');
+        drawFaceDark(cx, 'sun'); drawFaceDark(cx, 'moon');   // a face on a dead candle's side, faded to a silhouette (13.8)
+        drawArcHair(cx, 'sun'); drawArcHair(cx, 'moon');   // a hair of light, an awakening tell
+        drawEvilFace(cx, 'sun'); drawEvilFace(cx, 'moon');
+      } finally { G.t = tReal; }
       drawFaceBurns(cx, 'sun'); drawFaceBurns(cx, 'moon');   // soot, scorch, cracks, tears and the burned-in grin, over the printing
     });
 
@@ -4438,7 +5563,9 @@
       cx.fillRect(0, 0, cv.width, cv.height);
     }
     // flames are light: they show through any dark, and the smoke catches what little there is
-    perf('flames', () => { drawFlames(); drawSmokeFilm(); });
+    perf('flames', () => { drawFlames(); drawSmokeFilm(); drawArcEyes(); });   // (in a blackout the moon's eyes are lit, like the flames: they show through the dark)
+    perf('propsLit', drawPropsLit);   // the phone's display, the remote's button, the moth at the lens: light, like the flames (the props package)
+    perf('look', drawLook);   // the camera away from the table (the looks package): the whole picture, over everything; the blink still cuts it
     // the screen cut (blinkNow): a hard black over the whole picture, the camera's own glitch, not the room going dark
     if (G.blinkUntil && performance.now() < G.blinkUntil) {
       cx.setTransform(1, 0, 0, 1, 0, 0); cx.globalAlpha = 1; cx.globalCompositeOperation = 'source-over';
@@ -4604,6 +5731,7 @@
       perf('sim', () => { while (left > 1e-6) { const d = Math.min(left, 1 / 60); stepSim(d); left -= d; } });
     }
     fxFrame(dtReal);   // the marks: gouges cooling, letters cracking, the stain, the faces' burns (before the faces look where they look)
+    arcTick(dtReal);   // the faces' arc: the night's mood for each, the look away and the look back (before they look where they look)
     updateFaces(dtReal);
     updateEvil(dtReal); byeUpdate(dtReal); byeWatch(dtReal);
     updateCrowd(dtReal);
@@ -4794,8 +5922,9 @@
   // ---------------------------------------------------------------- the transcript
   const tq = $('#tq'), ta = $('#ta'), tref = $('#tref');
   function showQuestion(q) { tq.textContent = q; tq.classList.remove('plain', 'waiting', 'pencil', 'fading'); ta.classList.remove('fading'); ta.textContent = ''; ta.dataset.len = ''; ta.classList.remove('hint'); if (tref) tref.hidden = true; fitTa(); }
-  // between the pieces of one reply (its lines, a mark it lands on): a wide space, no dot (Pierce, 2026-10-08: "the dots between the words")
-  const SEP = '\u2003';
+  // between the pieces of one reply (its lines, a mark it lands on): the dot, and only there, never inside a line (Pierce, 2026-10-08, after the
+  // wide space of the afternoon: "put the dots back if you use them right")
+  const SEP = ' \u00b7 ';
   function addLetter(ch, cls) {
     if (S.cut && S.unprompted) return document.createElement('span');   // its own line was cut for the dare
     ta.classList.remove('fading');
@@ -4999,12 +6128,12 @@
     lines.push(line);
     return lines.length > SAY_LINES ? null : lines;
   }
-  function cleanSay(v) {
+  function cleanSay(v, allow) {
     const a = String(v == null ? '' : v).toUpperCase().replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
     if (!a || a.length > SAY_TOTAL) return '';
     const lines = splitSay(a);
     if (!lines || !lines.length) return '';
-    if (/\b(AI|CLAUDE|GEMINI|MODEL|BOT|ASSISTANT|LANGUAGE)\b/.test(a) || refused(a) || readsRecord(a) || saysDate(a) || outOfRoom(a) || LORE.test(a)) return '';
+    if (/\b(AI|CLAUDE|GEMINI|MODEL|BOT|ASSISTANT|LANGUAGE)\b/.test(a) || refused(a, allow) || readsRecord(a) || saysDate(a) || outOfRoom(a) || LORE.test(a)) return '';
     if (soundsLikeDistress(a)) return '';
     return lines.join(' ');
   }
@@ -5017,16 +6146,22 @@
   //     lie, sun, moon, closer, edit: { turn, text }, possess, end,
   //     clip, cut, buzz, blink, thrum, silence }   (the production's pictures and the light in their hand: DIRECTION.md 6)
   const MOVE_TO = ['spell', 'YES', 'NO', 'GOODBYE', 'letter', 'number', 'hover', 'circle', 'center', 'edge', 'still', 'shake', 'sound'];
-  // (the site's CLIPS, CUTS, THRUMS, BUZZ and SILENCE_MAX, in its order: spirit.js. A clip or a cut the page has no film for draws nothing.)
+  // (the site's THRUMS, BUZZ and SILENCE_MAX, in its order: spirit.js. The site no longer offers a clip or a cut, 2026-10-08: nothing is filmed for either, so every
+  // call drew nothing. These two lists are kept, and playFilm and cutTo with them, for when the props engine and the rooms bring a call back.)
   const CLIPS = ['', 'cloth', 'pencil-turn', 'pencil-off', 'pencil-back', 'pencil-down', 'lean-hold', 'lean', 'gust', 'relight', 'out-l', 'out-r',
     'hands-relight', 'saucer', 'wax', 'board-slide', 'blue', 'blue-out', 'relight-blue', 'chair-back', 'fingers'];
   const CUTS = ['', 'hallway/door', 'hallway/shadow', 'hallway/lamp', 'mantle/pendulum', 'mantle/photo', 'mantle/candle', 'bathroom/drip', 'bathroom/mirror',
     'bathroom/curtain', 'door/knocks', 'door/handle', 'door/peephole-1', 'door/peephole-2', 'door/peephole-3', 'cellar/latch', 'cellar/open', 'stairs/step',
     'stairs/light', 'window/breath'];
   const THRUMS = ['', 'rise2', 'rise4', 'hold', 'grit', 'cut'];
+  // The wiring of 2026-10-08 (DIRECTION.md 12, 13.2, 13.3, 13.12): a thing on the table misbehaves (prop), the camera turns (look), the abacus counts
+  // (count). The site's lists are the same words (spirit.js PROPS, LOOKS). A name the page has no film or code for draws nothing and says so in the log.
+  const PROPS = ['', 'glass', 'salt', 'napkins', 'fork', 'pen', 'phone', 'remote', 'keys', 'apples', 'mug', 'glasses', 'matches', 'match-strike', 'moth'];
+  const LOOKS = ['', 'up', 'left', 'right', 'clock', 'micro', 'tv', 'abacus', 'hall', 'ceiling', 'hallway/door', 'hallway/shadow', 'hallway/lamp', 'door/handle',
+    'door/knocks', 'door/peephole-2', 'door/peephole-3', 'cellar/latch', 'cellar/open', 'stairs/step', 'stairs/light', 'window/breath', 'bathroom/drip', 'bathroom/mirror'];
   // (the site's SCRATCH_CORNERS, SCRATCH_DIRS, EMBERS, CRACKS, STAINS and BURNS, in its order: spirit.js. The marks the page draws on the board and the
   // faces, names only: a name the page does not know is nothing.)
-  const SCRATCH_CORNERS = ['bottom-left', 'bottom-right', 'top-left', 'top-right'], SCRATCH_DIRS = ['across', 'along', 'up', 'yes', 'no', 'you'];
+  const SCRATCH_CORNERS = ['bottom-left', 'bottom-right', 'top-left', 'top-right'], SCRATCH_DIRS = ['across', 'along', 'up', 'yes', 'no', 'you', 'moth'];
   const EMBER_NAMES = ['warm', 'green', 'blue'], CRACK_KEYS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').concat(['YES', 'NO']);
   const STAIN_PLACES = ['glass', 'left', 'right', 'top', 'bottom', 'middle', 'sun', 'moon'], BURN_NAMES = ['soot', 'crack', 'ember', 'scorch', 'tears', 'grin', 'dark'];
   const BUZZ = /^\d{1,4}(,\d{1,4}){0,7}$/;
@@ -5040,14 +6175,16 @@
   const SIDES = ['', 'left', 'right', 'behind', 'under', 'above'];
   const intIn = (v, a, b) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? clamp(n, a, b) : a; };
   // the voice's words: capitals and spaces, six words and 48 characters at most, the same checks as a spelled line
-  function cleanEar(v) {
+  function cleanEar(v, allow) {
     const a = String(v == null ? '' : v).toUpperCase().replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
     if (!a || a.length > EAR_MAX || a.split(' ').length > EAR_WORDS) return '';
-    if (/\b(AI|CLAUDE|GEMINI|MODEL|BOT|ASSISTANT|LANGUAGE)\b/.test(a) || refused(a) || readsRecord(a) || saysDate(a) || outOfRoom(a) || LORE.test(a) || soundsLikeDistress(a)) return '';
+    if (/\b(AI|CLAUDE|GEMINI|MODEL|BOT|ASSISTANT|LANGUAGE)\b/.test(a) || refused(a, allow) || readsRecord(a) || saysDate(a) || outOfRoom(a) || LORE.test(a) || soundsLikeDistress(a)) return '';
     return a;
   }
-  function cleanReply(r) {
+  // o.sneer: the words this turn lets through (sneerOf: PATHETIC and CUTE, in answer to one of their tests)
+  function cleanReply(r, o = {}) {
     if (!r || typeof r !== 'object' || Array.isArray(r)) return null;
+    const allow = Array.isArray(o.sneer) ? o.sneer : [];
     let sounds = 0;
     const moves = (Array.isArray(r.moves) ? r.moves : []).slice(0, 12).map((m) => {
       if (!m || typeof m !== 'object' || !MOVE_TO.includes(m.to)) return null;
@@ -5068,10 +6205,10 @@
     const editText = String(e.text == null ? '' : e.text).replace(/[^A-Za-z0-9 .,?!'-]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140);
     const lie = r.lie === true;
     return {
-      distress: false, say: cleanSay(r.say), moves, wait_ms: intIn(r.wait_ms, 0, 8000),
+      distress: false, say: cleanSay(r.say, allow), moves, wait_ms: intIn(r.wait_ms, 0, 8000),
       pace: ['slow', 'normal', 'violent'].includes(r.pace) ? r.pace : 'normal', sfx: SFX.includes(r.sfx) ? r.sfx : 'none',
       sfx_side: SIDES.includes(r.sfx_side) ? r.sfx_side : '',
-      whisper: { text: cleanEar(w.text), side: w.side === 'right' ? 'right' : 'left' },
+      whisper: { text: cleanEar(w.text, allow), side: w.side === 'right' ? 'right' : 'left' },
       // the sun never lies (the site holds it to that; so does the phone)
       lie, sun: lie ? 'warn' : (SUN_SET.includes(r.sun) && r.sun !== 'warn' ? r.sun : 'watch'), moon: MOON_SET.includes(r.moon) ? r.moon : 'watch',
       closer: r.closer === true,
@@ -5086,6 +6223,10 @@
       blink: r.blink === true,
       thrum: typeof r.thrum === 'string' && THRUMS.includes(r.thrum) ? r.thrum : '',
       silence: intIn(r.silence, 0, SILENCE_MAX),
+      // the table, the camera and the abacus (2026-10-08): a prop by name, a look by name, a count of beads
+      prop: typeof r.prop === 'string' && PROPS.includes(r.prop) ? r.prop : '',
+      look: typeof r.look === 'string' && LOOKS.includes(r.look) ? r.look : '',
+      count: intIn(r.count, 0, 30),
       // the marks: a gouge (a corner alone runs across; a direction alone starts at the bottom left), the colour of the embers, a letter to split,
       // water over the board, a burn on the faces
       scratch: cleanScratch(r.scratch),
@@ -5258,6 +6399,7 @@
       question: turn.q || '', why: turn.why || '', quiet: turn.quiet || 0, stop: !!turn.stop, house: turn.house || [], at: turn.at,
       erased: turn.erased || '', typing: turn.typing || '', did: turn.did || [], behind: turn.behind || 0, sat: turn.sat || 0, away: turn.away || 0,
       hint: turn.hint || '',   // what the page read in the line (the troll table): one plain sentence for the demon, '' for none
+      rung: turn.rung || 0,    // and which of their tests tonight it was, 1 to 4 (a number; the sneer ladder, below), 0 for none
     });
     NET.last = 'asking';
     const at = NIGHT.turns.length + 1;
@@ -5277,7 +6419,7 @@
     if (j.reason === 'fear') return { fear: true };
     if (j.reason === 'grief') return { grief: true };
     if (typeof j.demon === 'string' && /^[a-z]{2,16}$/.test(j.demon)) NIGHT.demon = j.demon;
-    const r = cleanReply(j.reply);
+    const r = cleanReply(j.reply, { sneer: sneerOf(turn) });
     if (!r) return { none: String(j.reason || 'none') };
     // the whisper's audio. Since 2026-10-05 the move never waits for it: the site signs the whisper's words and the page asks for the audio
     // the moment the move lands (fetchWhisper), while the board is still spelling; it is heard on its beat if it is in by then, a little
@@ -5326,7 +6468,7 @@
     if (ptr && G.t - ptr.t0 > 900) noteDid('hold');
     const typedHow = o.part ? { erased: '', typing: '' } : TYPED.take(q || '');
     return {
-      at: clockText(), q: q || '', part: !!o.part, why: q ? '' : (o.why || 'silence'), quiet: o.quiet || 0, stop: !!o.stop, house: NIGHT.house.splice(0), hint: o.part ? '' : String(o.hint || ''),
+      at: clockText(), q: q || '', part: !!o.part, why: q ? '' : (o.why || 'silence'), quiet: o.quiet || 0, stop: !!o.stop, house: NIGHT.house.splice(0), hint: o.part ? '' : String(o.hint || ''), rung: o.part || !o.hint ? 0 : intIn(o.rung, 0, 4),
       erased: typedHow.erased, typing: q && !o.part ? typedHow.typing : '', did: NIGHT.did.splice(0), behind: NIGHT.behind,
       // how long they have been at the table, and how long they were away from the page since the last move (the site says both in words)
       sat: Math.round(nightSecs()), away: takeAway(o.why), r: null,
@@ -5410,7 +6552,8 @@
   // A move's landing: go to (x, y) and stay its dwell; the sounds put right after it in the moves come the instant it arrives.
   async function landOn(x, y, opts, atLand) {
     const go = moveTo(x, y, opts);
-    if (atLand && atLand.length) { const path = P.path; arrived(path).then(() => { if (!halt) atLand.forEach((m) => playMoveSound(m)); }); }
+    // (the sun knows when the piece will land: its eyes go to the side of the sound ARC.LEAD ms before, and the sound stays on the beat)
+    if (atLand && atLand.length) { const path = P.path; arcLandLead(path, atLand); arrived(path).then(() => { if (!halt) atLand.forEach((m) => playMoveSound(m, true)); }); }
     await go;
   }
   // A word that begins with YOU (YOU, YOUR, YOURE): both faces look straight out at them while it is spelled, and a moment after.
@@ -5434,7 +6577,7 @@
     // they sent a line while it was making a move of its own: it stops where it is and answers them (S.cut)
     const cutNow = () => S.cut && S.unprompted;
     nlog('move', { pace: r.pace, wait: r.wait_ms, moves: r.moves.map((m) => m.to + (m.mark ? ':' + m.mark : '') + (m.side ? '@' + m.side : '')).join(' '), say: r.say, sfx: r.sfx, possess: r.possess, end: r.end, sun: r.sun, moon: r.moon, closer: r.closer, whisper: r.whisper && r.whisper.text ? r.whisper.side : '', edit: r.edit && r.edit.turn ? r.edit.turn : 0,
-      clip: r.clip || '', cut: r.cut || '', buzz: r.buzz || '', blink: !!r.blink, thrum: r.thrum || '', silence: r.silence || 0,
+      prop: r.prop || '', look: r.look || '', count: r.count || 0, clip: r.clip || '', cut: r.cut || '', buzz: r.buzz || '', blink: !!r.blink, thrum: r.thrum || '', silence: r.silence || 0,
       scratch: r.scratch && r.scratch.corner ? r.scratch.corner + '>' + r.scratch.direction : '', ember: r.ember || '', crack: r.crack || '', stain: r.stain || '', burn: r.burn || '' });
     dropPath(); P.mode = 'free'; P.tx = P.x; P.ty = P.y; trollStop();
     noteCandleNamed(r.say);
@@ -5473,13 +6616,21 @@
       return true;
     };
     // its own words where a "whisper-voice" mark puts them; "whisper" is always the wordless one
-    playMoveSound = (m) => { if (m.mark === 'whisper-voice') { sayVoice(m.side); return; } playSfx(m.mark, m.side); };
+    // (a sound that waits for the sun to look first is held until it has been played: perform never ends with one still to come)
+    const sounding = [];
+    playMoveSound = (m, beat) => {
+      if (m.mark === 'whisper-voice') { sayVoice(m.side); return; }
+      const p = playSfx(m.mark, m.side, beat ? (m.pre ? { sd: m.pre.sd, led: true } : true) : undefined);
+      if (p) sounding.push(p);
+    };
     // it sits before it moves: still, a breath of a tremble
     if (r.wait_ms > 0) { trembleOn(0.45); try { await wait(r.wait_ms); } finally { trembleOff(); } }
     live();
     // the faces: what the demon chose for this move (the sun warns of a lie as the move begins), held a while after
     // (held for as long as the move takes, however long its line: holdFaces lets them go eight seconds after it stops)
-    setFaces(r.sun, r.moon, 120000);
+    setFaces(r.sun, r.moon, 120000, 'demon');
+    arcCruel(r, violent);   // cruel to them: the moon is pained (it is on their side), or flinches for them
+    { const fs = arcForesee(r); if (fs) { await wait(fs); live(); } }   // hungry: the moon looks where the piece will go a beat before it goes
     if (r.ember && setEmber(r.ember)) done.ember = r.ember;   // the colour of every ember from here on: this move's landings and trail are in it
     // a name at the table is said twice a night at most (spell() keeps that count); a line past it is left out
     const say = r.say && !(sayHasName(r.say) && NAMEUSE.spelled + NAMEUSE.voiced >= NAMEUSE.max) ? r.say : '';
@@ -5508,6 +6659,7 @@
           for (let k = 0; k < says.length; k++) {
             if (k) { await wait(rnd(500, 800)); live(); if (cutNow()) break; addLetter(SEP); }
             // (o.char: the last line of the night chars the board as it lands)
+            arcFlinchAt(0, 0.55);   // a line begins to land: the shy moon flinches
             await spell(says[k], { hostile: violent, dw: K.dw, nameUse: true, fit: say.length, char: !!o.char && k === says.length - 1 });
           }
           line.push(say); done.say = say; MEM.line(say);
@@ -5526,7 +6678,7 @@
           // (a run of single letters is a word landed at the first build's weight: the travel and the rest of a spelled letter)
           const per = landBase + 250 * landPace + (violent ? 170 : 540) * K.dw;
           if (!word) { await piece(); const run = runAt(i); if (run && isYou(run.w)) eyesOnYou(1200 + run.w.length * per); }
-          if (m.mark === lastMark) { const go = circleOn(g, 900, 18); atLand.forEach((x) => playMoveSound(x)); await go; }
+          if (m.mark === lastMark) { const go = circleOn(g, 900, 18); atLand.forEach((x) => playMoveSound(x, true)); await go; }
           else await landOn(g.x, g.y, { pace: landPace, base: landBase, dwell: m.ms || restOf() }, atLand);
           live(); commit(g, violent); addLetter(m.mark); word += m.mark; lastMark = m.mark;
           break;
@@ -5608,7 +6760,11 @@
     if (r.blink) { blinkNow(); done.blink = true; NIGHT.blinks++; }   // (the demon's blink counts toward the haunted phase's two)
     if (r.clip) { done.clip = r.clip; playFilm(r.clip); }
     if (r.cut) { done.cut = r.cut; cutTo(r.cut); }
+    if (r.prop) { done.prop = r.prop; propPlay(r.prop); }           // a thing on the table misbehaves (the props package)
+    if (r.look) { done.look = r.look; lookAt(r.look); }              // the camera turns, a room, the ceiling, a cutaway (the looks package)
+    if (r.count > 0) { done.count = r.count; countBeads(r.count); }  // the abacus (the looks package)
     fxPerform(r, done, o);   // the marks, drawn on the board and the faces: a gouge, a split letter, a stain, a burn (fx section; nothing is filmed)
+    if (sounding.length) await Promise.all(sounding);   // (a sound the sun looked ahead of is played before the move is over)
     const said = line.join(' · ');
     const out = { done, said, ...held() };
     // the record: one of their earlier lines, shown back to them changed, for four seconds (once a night; the ending's stays, o.stay, and
@@ -5684,16 +6840,54 @@
   }
   const FACE_LOOKS = { under: ['knocks', 'scratch', 'nails', 'floor', 'latch', 'rattle', 'drag', 'voices', 'stairs'], above: ['steps', 'light', 'thud'],
     behind: ['breath', 'gasp', 'near', 'silence'], ear: ['whisper', 'shh', 'click'] };
-  function playSfx(k, side) {
+  // Where the faces' eyes go for a sound: the cellar under, the attic above, past them, the ear it was at (the tap on the glass in their
+  // hand: straight at them, ''). sd: the side it is heard on, where: the side the demon placed it, or ''.
+  const sfxLookAt = (k, sd, where) => (FACE_LOOKS.ear.includes(k) ? 'ear-' + sd : k === 'tap' ? '' : where || (FACE_LOOKS.under.includes(k) ? 'under' : FACE_LOOKS.above.includes(k) ? 'above' : FACE_LOOKS.behind.includes(k) ? 'behind' : sd));
+  // The sun knows what the house is about to do (2026-10-08): its eyes go to the side of a sound ARC.LEAD ms BEFORE the sound, and the sound
+  // comes after. The moon's reaction stays a beat after it. Not while they type (the sun is on them), not in the taking or the fight.
+  // (beat: the sound is on a beat of the piece's, the instant it lands: it is never held back. beat is true, or {sd, led} when the sun's eyes
+  // were sent ahead by arcLandLead. Returns a promise when the sound waits for the sun, which resolves when it has been played.)
+  function playSfx(k, side, beat) {
+    if (halt) return undefined;
+    if (beat) { playSfxNow(k, side, beat === true ? undefined : beat); return undefined; }
+    const lead = arcLead(k);
+    if (!lead) { playSfxNow(k, side); return undefined; }
+    const { sd, where, look } = sfxPlan(k, side);
+    lookToward(look, undefined, lead);
+    arcNote('lead', { sfx: k, side: where || sd, look, ms: lead, t0: Math.round(performance.now()) });
+    const night = nightNo, gen = haltGen;
+    return new Promise((res) => setTimeout(() => { try { if (night === nightNo && gen === haltGen && !halt) playSfxNow(k, side, { sd, led: true }); } finally { res(); } }, lead));   // (the move waits for this: it is always let go)
+  }
+  // the side a sound is heard on, the side the demon placed it, and where the faces' eyes go for it
+  function sfxPlan(k, side) {
+    const sd = EARS.includes(side) ? side : pick(['left', 'right']), where = SIDES.includes(side) && side ? side : '';
+    return { sd, where, look: sfxLookAt(k, sd, where) };
+  }
+  // a sound the instant a landing lands: the sun's eyes go to its side ARC.LEAD ms before the piece arrives (at once when it is nearer than that)
+  function arcLandLead(path, atLand) {
+    if (!path || !ARC.on) return;
+    const iv = setInterval(() => {
+      if (halt || P.path !== path || path.phase !== 'move') { clearInterval(iv); return; }
+      const eta = (1 - path.t) * path.dur;
+      if (eta > ARC.LEAD) return;
+      clearInterval(iv);
+      for (const m of atLand) {
+        const lead = m.mark === 'whisper-voice' ? 0 : arcLead(m.mark); if (!lead) continue;
+        const { sd, where, look } = sfxPlan(m.mark, m.side);
+        m.pre = { sd }; lookToward(look, undefined, lead);
+        arcNote('lead', { sfx: m.mark, side: where || sd, look, ms: Math.round(eta), beat: true, t0: Math.round(performance.now()) });
+      }
+    }, 8);
+  }
+  function playSfxNow(k, side, led) {
     if (halt) return;
-    const sd = EARS.includes(side) ? side : pick(['left', 'right']);
+    const sd = led ? led.sd : EARS.includes(side) ? side : pick(['left', 'right']);
     const where = SIDES.includes(side) && side ? side : '';
     nlog('sfx', { sfx: k, side: where });
-    // the faces' eyes go where it came from (the cellar under, the attic above, past them, the ear it was at); the tap on the glass in
-    // their hand: straight at them
-    if (FACE_LOOKS.ear.includes(k)) lookToward('ear-' + sd);
-    else if (k === 'tap') eyesOnYou(1600);
-    else lookToward(where || (FACE_LOOKS.under.includes(k) ? 'under' : FACE_LOOKS.above.includes(k) ? 'above' : FACE_LOOKS.behind.includes(k) ? 'behind' : sd));
+    ARC.sound = { t: G.t, side: where || sd };
+    arcNote('sound', { sfx: k, led: !!led, sun: [+FACE.sun.lx.toFixed(2), +FACE.sun.ly.toFixed(2)], moon: [+FACE.moon.lx.toFixed(2), +FACE.moon.ly.toFixed(2)], t0: Math.round(performance.now()) });
+    // the faces' eyes go where it came from; the tap on the glass in their hand: straight at them
+    if (!led) { const look = sfxLookAt(k, sd, where); if (look) lookToward(look); else eyesOnYou(1600); }
     const rec = (kind, at, vol) => {
       if (!A.rec) return 0;
       A.lastTake = null;
@@ -5759,8 +6953,8 @@
   const NIGHT = { id: '', demon: '', turns: [], house: [], did: [], behind: 0, behindStep: 0, behindSide: 1, unfinished: 0, lastUnfinished: -Infinity, edited: false, whispers: 0, said: new Set(), looks: {}, usedNotes: new Set(), tl: [], spelledLines: [], own: 0, lastOwn: -Infinity, ownAfter: 20000, offNoted: false, again: false, voiced: 0, voiceSet: {} };
   // The troll table's memory (below, the troll table): the lines sent and when, what was pasted, how many of each kind, and the generation a glide of the
   // piece belongs to. A new night starts it over.
-  const TROLL = { recent: [], sends: [], pasted: null, gen: 0, n: 0, cats: {}, lastCat: '', lastAt: -Infinity, idle: 0, idleKey: 0, stall: '', stallT: 0, spamUntil: 0, calmUntil: 0, burst: null };
-  const trollReset = () => { Object.assign(TROLL, { recent: [], sends: [], pasted: null, gen: TROLL.gen + 1, n: 0, cats: {}, lastCat: '', lastAt: -Infinity, idle: 0, idleKey: 0, stall: '', stallT: 0, spamUntil: 0, calmUntil: 0, burst: null }); clearTimeout(TROLL.stallT); };
+  const TROLL = { recent: [], sends: [], pasted: null, gen: 0, n: 0, ladder: 0, rung: 0, cats: {}, lastCat: '', lastAt: -Infinity, idle: 0, idleKey: 0, stall: '', stallT: 0, spamUntil: 0, calmUntil: 0, burst: null };
+  const trollReset = () => { Object.assign(TROLL, { recent: [], sends: [], pasted: null, gen: TROLL.gen + 1, n: 0, ladder: 0, rung: 0, cats: {}, lastCat: '', lastAt: -Infinity, idle: 0, idleKey: 0, stall: '', stallT: 0, spamUntil: 0, calmUntil: 0, burst: null }); clearTimeout(TROLL.stallT); };
   const normLine = (t) => String(t || '').toUpperCase().replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
   const FREE_WORDS = new Set(['YES', 'NO', 'GOODBYE']);
   const wasSaid = (t) => { const n = normLine(t); return !!n && !FREE_WORDS.has(n) && NIGHT.said.has(n); };
@@ -5805,6 +6999,7 @@
     NLAST = NLOG.splice(0, NLOG.length);
     NIGHT.looks0 = {};
     for (const k in NIGHT.looks) NIGHT.looks0[k] = NIGHT.looks[k].length;
+    propNight();   // the table's props start over (the props package)
   }
   function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
   const looksLeft = (k) => (NIGHT.looks[k] || []).length;
@@ -6064,6 +7259,894 @@
     });
   }
 
+  // ---------------------------------------------------------------- the looks package (2026-10-08)
+  // The camera is the guest's own head (DIRECTION.md 4, 12, 13.3, 13.12; Pierce, 2026-10-07: "When you hear a sound on the left, it can like turn
+  // to the left and return back to the board. Just in time to see a shadow."). A look is three parts on the films in places.js FARMHOUSE.looks:
+  //   IN: the turn off the table (a transit clip, trimmed at the turn: Flow invented a candlelit table in the middle of every one), cover-fit to
+  //       the screen at 16:9 and drawn over everything. The live table (board and all) is carried into the turn: for 400 ms the picture as it
+  //       is slides the way the head turns while the film comes up over it, so the first frame of every look is the table exactly as it was.
+  //   HOLD: the room's locked still (captured to a canvas), the room's own clips played over it, and the live part drawn over a measured quad
+  //       (the cat clock's hands, the microwave's display, the television's snow, the moon in the plaster).
+  //   OUT: the turn back, and the live table carried out of it the same way, so the last frame is the table as it is now; one thing has
+  //       changed while the view was away.
+  // A cutaway is a hard cut to a clip's first frame, the clip, a hard cut back. Underneath, the night goes on: the box, the planchette and a
+  // GOOD BYE hold all keep working (the look is only a picture). A stopped night (the title, a held candle) ends a look at once, on the table.
+  // Two <video> elements at most (MAX_VID, the flame family's two are permanent): the clip on screen and the next one, loaded while it plays.
+  // A look whose film is not there draws nothing and says so in the night log.
+  const LK = {
+    run: null, on: false, phase: '', next: null, pre: null,
+    vid: null, base: null, dis: null, over: null, zoom: null, fade: null, slide: null,
+    keep: new Set(), watch: [], log: [], frames: 0, cost: { n: 0, sum: 0, max: 0, slow: 0 },
+    night: -1, seen: new Set(), uncalled: 0, unAt: 0, changes: 0, afterDone: false, lookedUp: false, upAt: 0, quick: 0, keysAt: 0, lastEnd: -Infinity,
+  };
+  // where each room is heard from the table ({ x, y, z } in metres from their head, as A.rec), and which way the head turns to it (the
+  // live table slides the other way: [x, y] of the screen, as fractions of its width)
+  const LK_ROOM = {
+    clock: { at: { x: 3.2, y: 0.6, z: -1 }, dir: [-1, -0.05] },
+    micro: { at: { x: 4, y: 0.1, z: 0.4 }, dir: [-1, 0] },
+    tv: { at: { x: -3, y: 0, z: -3 }, dir: [0.6, 0.6] },
+    abacus: { at: { x: 2.4, y: -0.4, z: -1.6 }, dir: [-0.9, -0.3] },
+    hall: { at: { x: -3.5, y: 0.3, z: -0.5 }, dir: [-0.35, 0.85] },
+    ceiling: { at: { x: 0, y: 2.4, z: -0.6 }, dir: [0, 0.9] },
+  };
+  // the cutaways: where the room is, and its sound (kind, seconds into the cut, level), from the library (assets/sfx/farmhouse/manifest.json)
+  const LK_CUT = {
+    'hallway/door': { at: { x: -5, y: 0.3, z: -1 }, snd: [['door', 0.9, 0.45]] },
+    'hallway/lamp': { at: { x: -5, y: 0.6, z: -1 }, snd: [['house-far', 1.2, 0.35]] },
+    'hallway/shadow': { at: { x: -5, y: 0.3, z: -1 }, snd: [['pass', 0.6, 0]] },
+    'door/knocks': { at: { x: 0.8, y: 0.2, z: 5 }, snd: [['knock3', 0.5, 0]] },
+    'cellar/open': { at: { x: 2.6, y: -0.6, z: 2.5 }, snd: [['creak', 1.0, 0.5], ['under', 2.4, 0.45]] },
+    'stairs/light': { at: { x: -2.4, y: 2.2, z: 3.5 }, snd: [['light', 1.0, 0.6]] },
+    'bathroom/mirror': { at: { x: -3.4, y: 0.2, z: 3.8 }, snd: [['drip', 0.5, 0.5]] },
+    'door/handle': { at: { x: 0.8, y: 0.2, z: 5 }, snd: [['latch', 1.0, 0.6]] },
+    'door/peephole-2': { at: { x: 0.8, y: 0.2, z: 5 }, snd: [['house-far', 0.4, 0.3]] },
+    'door/peephole-3': { at: { x: 0.8, y: 0.2, z: 5 }, snd: [['house-far', 0.4, 0.3]] },
+    'cellar/latch': { at: { x: 2.6, y: -0.6, z: 2.5 }, snd: [['latch', 0.9, 0.7], ['under', 2.6, 0.5]] },
+    'stairs/step': { at: { x: -2.4, y: 1.2, z: 3.5 }, snd: [['stairs', 0.5, 0.7]] },
+    'window/breath': { at: { x: 3, y: 0.4, z: -2.6 }, snd: [['breath', 0.4, 0]] },
+    'bathroom/drip': { at: { x: -3.4, y: 0.2, z: 3.8 }, snd: [['drip', 0.75, 0.7], ['drip', 1.75, 0.6]] },
+    'bathroom/curtain': { at: { x: -3.4, y: 0.2, z: 3.8 }, snd: [['house-far', 0.2, 0.4]] },
+  };
+  // the head turned to it: a sound in the room the view is on is in front
+  const LK_AHEAD = { x: 0.25, y: 0.15, z: -2.6 };
+  const LK_FADE = 400;   // ms: the live table carried into the turn, and out of it
+  // the files named under PL.looks (the engine's clips are 'look:' + the file)
+  function lookFiles() {
+    const out = new Set(), walk = (v) => { if (!v) return; if (typeof v === 'string') { out.add(v); return; } if (typeof v === 'object') Object.values(v).forEach(walk); };
+    walk(PL && PL.looks); return out;
+  }
+  function lookKeep() { try { return LK.keep; } catch (e) { return []; } }   // (loadClip's: what a look is using or about to)
+  function lookSrc(name) { return PL && PL.id && lookFiles().has(name) ? 'assets/clips/' + PL.id + '/' + name : ''; }
+  const lkAlive = (run) => LK.run === run && !halt && run.g === haltGen && run.night === nightNo;
+  const lkId = (src) => 'look:' + src;
+  function lkMakeRoom() {
+    for (const [k, v] of [...PV.vids]) if (k.startsWith('look:') && !LK.keep.has(k)) dropClip(k, v);
+  }
+  function lkRelease(src) {
+    const id = lkId(src); LK.keep.delete(id);
+    const v = PV.vids.get(id); if (v && (!LK.vid || LK.vid !== v.el)) { try { v.el.pause(); } catch (e) { /* fine */ } }
+  }
+  function lkSeek(el, t, ms) {
+    return new Promise((res) => {
+      let done = false;
+      const end = () => { if (done) return; done = true; el.removeEventListener('seeked', on); clearTimeout(to); res(); };
+      // (a seek of someone else's can land first: loadClip's own to 0.001 on loadeddata. Then this one is asked again.)
+      let tries = 0;
+      const on = () => { if (Math.abs(el.currentTime - t) < 0.06) end(); else if (++tries < 4) { try { el.currentTime = t; } catch (e) { end(); } } };
+      const to = setTimeout(end, ms);
+      el.addEventListener('seeked', on);
+      try { el.pause(); el.currentTime = t; } catch (e) { end(); }
+    });
+  }
+  // A clip of this look, loaded and showing the frame at t (paused there), or null after ms (not there, failed, or no room for it).
+  // One wait per clip at a time: a second ask for the same frame shares the first (two loops seeking one element fight: one pauses what the
+  // other has just started playing).
+  const LK_PEND = new Map();
+  function lkReady(src, t, ms) {
+    const id = lkId(src), p = LK_PEND.get(id);
+    if (p && p.t === t) { p.until = Math.max(p.until, performance.now() + ms); return p.p; }
+    const e = { t, until: performance.now() + ms, p: null };
+    e.p = (p ? p.p.catch(() => null) : Promise.resolve()).then(() => lkReadyNow(src, t, e)).finally(() => { if (LK_PEND.get(id) === e) LK_PEND.delete(id); });
+    LK_PEND.set(id, e);
+    return e.p;
+  }
+  async function lkReadyNow(src, t, e) {
+    const id = lkId(src), url = lookSrc(src);
+    LK.keep.add(id);
+    if (!url) return null;
+    for (;;) {
+      if (!PV.vids.has(id)) { lkMakeRoom(); loadClip(id); }
+      const v = PV.vids.get(id);
+      if (v && !v.failed && v.el.readyState >= 2) {
+        v.used = performance.now();
+        const el = v.el;
+        if (!(Math.abs(el.currentTime - t) < 0.03 && !el.seeking && el.paused)) await lkSeek(el, t, Math.max(300, e.until - performance.now()));
+        if (Math.abs(el.currentTime - t) < 0.06 && !el.seeking && el.readyState >= 2) { lkWarm(el); return el; }   // (the frame there is decoded, not only asked for)
+      }
+      if (PV.missing.has(url) || performance.now() > e.until || !LK.keep.has(id)) return null;   // (a clip let go stops being waited for)
+      await sleep(40);
+    }
+  }
+  // Play from where it is to seg.to; resolves there (paused on that frame), at its end, or at a safety timeout.
+  function lkPlay(el, seg, o = {}) {
+    return new Promise((res) => {
+      const rate = o.rate || 1;
+      const w = { el, to: seg.to, res: null, done: false, t0: performance.now(), from: el.currentTime };
+      const fin = () => { if (w.done) return; w.done = true; clearTimeout(w.safety); try { el.pause(); } catch (e) { /* fine */ } LK.watch = LK.watch.filter((x) => x !== w); if (o.log) o.log.push([+w.from.toFixed(2), +el.currentTime.toFixed(2)]); res(true); };
+      w.res = fin;
+      w.safety = setTimeout(fin, (Math.max(0.1, seg.to - el.currentTime) / rate + 2.5) * 1000);
+      el.loop = false; el.playbackRate = rate; el.onended = fin;
+      LK.watch.push(w);
+      // stop on the frame: each decoded frame says where it is (a busy page draws fewer frames than the film has)
+      if (el.requestVideoFrameCallback) { const cb = (n, md) => { if (w.done) return; if (md.mediaTime >= seg.to - 0.03) fin(); else el.requestVideoFrameCallback(cb); }; el.requestVideoFrameCallback(cb); }
+      const poll = () => { if (w.done) return; if (el.currentTime >= seg.to - 0.02 || el.ended) fin(); else setTimeout(poll, 15); };
+      setTimeout(poll, 15);
+      const p = el.play(); if (p && p.catch) p.catch(() => fin());
+    });
+  }
+  // A clip's first frame drawn once where nobody sees it: WebKit makes the frame's texture inside the first drawImage (80 to 200 ms measured),
+  // so it is made while the clip waits, not in the first frame of a turn.
+  let lkWarmCv = null;
+  function lkWarm(el) {
+    try { if (!lkWarmCv) { lkWarmCv = document.createElement('canvas'); lkWarmCv.width = lkWarmCv.height = 2; } lkWarmCv.getContext('2d').drawImage(el, 0, 0, 2, 2); } catch (e) { /* fine */ }
+  }
+  function lkGrab(el) {
+    const w = el.videoWidth || 1920, h = el.videoHeight || 1080, c = document.createElement('canvas');
+    c.width = Math.min(1920, w); c.height = Math.round(c.width * h / w);
+    try { c.getContext('2d').drawImage(el, 0, 0, c.width, c.height); } catch (e) { return null; }
+    return c;
+  }
+  // every frame, before the picture: a clip that reached its trim stops on that frame
+  function lkTick() {
+    for (const w of LK.watch.slice()) {
+      const t = w.el.currentTime;
+      if (t >= w.to - 0.02 || w.el.ended) w.res();
+    }
+    if (LK.on && (halt || (LK.run && !lkAlive(LK.run)))) lkStop('halt');
+  }
+  function lkStop(why) {
+    const run = LK.run;
+    if (run) { run.stopped = why; nlog('look', { look: run.name, stopped: why }); }
+    for (const w of LK.watch.slice()) w.res();
+    LK.on = false; LK.run = null; LK.vid = LK.base = LK.dis = LK.over = LK.zoom = LK.fade = LK.slide = LK.pre = null; LK.phase = '';
+    LK.keep.clear(); LK.next = null; lkHideLine(false);
+    for (const [k, v] of PV.vids) if (k.startsWith('look:')) { try { v.el.pause(); } catch (e) { /* fine */ } }
+    lkSounds(true);
+  }
+  // the room's own sounds that carry on (the ticking, the snow): stopped with the look, or let go
+  const LK_SND = [];
+  function lkSounds(stop, fadeS) {
+    while (LK_SND.length) {
+      const h = LK_SND.pop();
+      try {
+        if (fadeS && h.g && h.g.context) { const t = h.g.context.currentTime; h.g.gain.cancelScheduledValues(t); h.g.gain.setValueAtTime(h.g.gain.value, t); h.g.gain.linearRampToValueAtTime(0, t + fadeS); h.src.stop(t + fadeS + 0.05); }
+        else h.src.stop();
+      } catch (e) { /* gone */ }
+    }
+  }
+  const lkRec = (kind, at, vol, o = {}) => (A.rec ? A.rec(kind, Object.assign({}, at, o, o.hold ? { keep: (h) => LK_SND.push(h) } : {}), vol) : 0);
+  // a clip asked for early (it loads when a decoder is free), waited for at most ms from now
+  const lkWithin = (p, ms) => (p ? Promise.race([p, sleep(ms).then(() => null)]) : Promise.resolve(null));
+  function lkSleep(run, ms) { return new Promise((r) => setTimeout(r, ms)).then(() => lkAlive(run)); }
+  // ---- the picture
+  let lkTab = null, lkStatic = null;
+  function lkCover(fw, fh) {
+    const W2 = cv.width, H2 = cv.height;
+    let k = Math.max(W2 / fw, H2 / fh), cxF = fw / 2, cyF = fh / 2;
+    const z = LK.zoom;
+    if (z) {
+      const e = z.k;   // current zoom (1 = cover)
+      if (e > 1.0001) {
+        const f = clamp((e - 1) / Math.max(0.001, z.max - 1), 0, 1);
+        cxF = lerp(fw / 2, z.x, f); cyF = lerp(fh / 2, z.y, f); k *= e;
+        // never past an edge of the film
+        cxF = clamp(cxF, W2 / 2 / k, fw - W2 / 2 / k); cyF = clamp(cyF, H2 / 2 / k, fh - H2 / 2 / k);
+      }
+    }
+    const ox = W2 / 2 - cxF * k, oy = H2 / 2 - cyF * k;
+    return { k, ox, oy, x: (u) => ox + u * k, y: (v) => oy + v * k, fw, fh };
+  }
+  function lkDrawFilm(g, src, M) { try { g.drawImage(src, M.ox, M.oy, M.fw * M.k, M.fh * M.k); } catch (e) { /* a frame not ready */ } }
+  function drawLookNow() {
+    lkTick();
+    if (!LK.on) return;
+    LK.frames++;
+    const T0 = performance.now();
+    try { drawLookFrame(); } finally { const d = performance.now() - T0; LK.cost.n++; LK.cost.sum += d; if (d > LK.cost.max) LK.cost.max = d; if (d > 16) LK.cost.slow++; }
+  }
+  function drawLookFrame() {
+    const now = performance.now(), W2 = cv.width, H2 = cv.height, g = cx;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+    // the film's own alpha (the turn coming up over the table, going back down into it) and the table carried into and out of the turn
+    let a = 1, sl = 0;
+    const f = LK.fade;
+    if (f && f.el) {
+      const t = f.el.currentTime;
+      const e = f.kind === 'in' ? clamp((t - f.from) * 1000 / f.ms, 0, 1) : clamp((f.to - t) * 1000 / f.ms, 0, 1);
+      a = e; sl = f.kind === 'in' ? e * e : (1 - e) * (1 - e);
+    } else if (f && f.kind === 'dissolve') {   // no film for the way back: the room goes down into the table
+      a = clamp(1 - (now - f.t0) / f.ms, 0, 1); sl = (1 - a) * (1 - a);
+    }
+    if (a < 1 && LK.slide) {
+      // the table as it is this frame, carried the way the head turns
+      if (!lkTab || lkTab.width !== W2 || lkTab.height !== H2) { lkTab = document.createElement('canvas'); lkTab.width = W2; lkTab.height = H2; }
+      const tg = lkTab.getContext('2d'); tg.globalAlpha = 1; tg.drawImage(cv, 0, 0);
+      const dx = LK.slide[0] * W2 * 0.3 * sl, dy = LK.slide[1] * H2 * 0.3 * sl;
+      g.fillStyle = '#050405'; g.fillRect(0, 0, W2, H2);
+      g.drawImage(lkTab, dx, dy);
+      if (sl > 0.02) { g.globalAlpha = 0.35; g.drawImage(lkTab, dx - LK.slide[0] * W2 * 0.03 * sl, dy - LK.slide[1] * H2 * 0.03 * sl); g.globalAlpha = 1; }
+    }
+    const fw = (LK.vid && LK.vid.videoWidth) || (LK.base && LK.base.width) || 1920, fh = (LK.vid && LK.vid.videoHeight) || (LK.base && LK.base.height) || 1080;
+    if (LK.zoom) { const z = LK.zoom, e = clamp((now - z.t0) / z.ms, 0, 1), s = e * e * (3 - 2 * e); z.k = lerp(z.from, z.to, s); }
+    const M = lkCover(fw, fh);
+    g.globalAlpha = a;
+    const vidOn = LK.vid && LK.vid.readyState >= 2 && !LK.vid.seeking;   // (a frame being sought is not drawn: WebKit waits for it inside drawImage)
+    perf('lookFilm', () => {
+      if (LK.base && !vidOn) lkDrawFilm(g, LK.base, M);   // (a playing clip covers its still exactly)
+      if (vidOn) lkDrawFilm(g, LK.vid, M);
+    });
+    if (LK.over) { try { LK.over(g, M, now); } catch (e) { /* an overlay never takes the picture down */ } }
+    if (LK.pre && LK.vid === LK.pre.el) {
+      const e = clamp(1 - (LK.pre.to - LK.pre.el.currentTime) * 1000 / LK.pre.ms, 0, 1);
+      if (e > 0) { g.globalAlpha = a * e; lkDrawFilm(g, LK.pre.cv, M); g.globalAlpha = a; }
+    }
+    if (LK.dis) {
+      const e = clamp((now - LK.dis.t0) / LK.dis.ms, 0, 1);
+      if (e >= 1) LK.dis = null; else { g.globalAlpha = a * (1 - e); lkDrawFilm(g, LK.dis.cv, M); }
+    }
+    // the film's grain and vignette, as over the table
+    perf('lookPost', () => {
+    g.globalAlpha = a; g.drawImage(vignCv, 0, 0, W2, H2);
+    if (grain.length && !FX.low) {
+      g.globalAlpha = a * ((PL.film && PL.film.grain != null) ? PL.film.grain : 0.07); g.globalCompositeOperation = 'overlay';
+      const pat = g.createPattern(grain[(Math.random() * grain.length) | 0], 'repeat');
+      g.save(); g.translate(rnd(0, 160), rnd(0, 160)); g.scale(DPR, DPR); g.fillStyle = pat; g.fillRect(-160, -160, W + 320, H + 320); g.restore();
+    }
+    });
+    g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+  }
+  // a point of the film inside a quad (u, v from 0 to 1 across it), on the screen
+  function lkQuad(q, M) {
+    const p = (u, v) => { const x = (1 - v) * ((1 - u) * q[0][0] + u * q[1][0]) + v * ((1 - u) * q[3][0] + u * q[2][0]), y = (1 - v) * ((1 - u) * q[0][1] + u * q[1][1]) + v * ((1 - u) * q[3][1] + u * q[2][1]); return [M.x(x), M.y(y)]; };
+    return p;
+  }
+  // an overlay that goes as the view turns away (it was drawn on the still; the turn moves the picture under it)
+  function lkFadeOver(fn, ms) {
+    let t0 = 0;
+    return (g, M, now) => { if (!fn) return; if (!t0) t0 = now; const e = (now - t0) / ms; if (e >= 1) return; g.save(); g.globalAlpha *= 1 - e; fn(g, M, now); g.restore(); };
+  }
+  function lkPath(g, pts) { g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); }
+
+  // ---- a room: IN, the hold, OUT
+  async function lkRoom(name, o = {}) {
+    const L = PL && PL.looks && PL.looks[name], R = LK_ROOM[name];
+    if (!L || !R || !L.in || !L.out) { nlog('look', { look: o.as || name, have: false }); return false; }
+    const run = { name, as: o.as || name, g: haltGen, night: nightNo, t0: performance.now(), beads: o.beads || 0, o, ph: {} };
+    LK.run = run; LK.keep.clear(); LK.phase = 'loading';
+    const pIn = lkReady(L.in.src, L.in.from, 12000);
+    const pStill = L.still && L.still.src !== L.in.src ? lkReady(L.still.src, L.still.at, 60000) : null;
+    if (LK_PRE[name]) LK_PRE[name](run, L);
+    const vin = await pIn;
+    if (!vin || !lkAlive(run)) {
+      if (LK.run === run) { LK.run = null; LK.keep.clear(); }
+      nlog('look', { look: run.as, have: false, why: vin ? 'stopped' : 'not ready' });
+      return false;
+    }
+    nlog('look', { look: run.as, have: true, uncalled: !!o.uncalled });
+    LK.seen.add(name);
+    // IN
+    let t = performance.now();
+    LK.on = true; LK.phase = 'in'; LK.vid = vin; LK.base = null; LK.dis = null; LK.over = null; LK.zoom = null; LK.slide = R.dir;
+    LK.fade = { kind: 'in', el: vin, from: L.in.from, ms: LK_FADE };
+    run.media = { in: [], out: [], cut: [] };
+    // the still, when it is ready before the turn ends, comes up over the turn's last join seconds (Flow's last frame sits a few px off it)
+    if (pStill && L.join > 0) pStill.then((vs) => { if (vs && lkAlive(run) && LK.phase === 'in') { const c = lkGrab(vs); if (c) { run.early = c; LK.pre = { cv: c, el: vin, to: L.in.to, ms: L.join * 1000 }; } } });
+    await lkPlay(vin, L.in, { log: run.media.in });
+    LK.pre = null;
+    run.ph.in = Math.round(performance.now() - t);
+    if (!lkAlive(run)) return lkEnded(run, false);
+    const last = lkGrab(vin);
+    LK.fade = null; LK.base = last; LK.vid = null;
+    lkRelease(L.in.src);   // (when the night has only one decoder free, the still loads into this one: the turn's last frame covers the wait)
+    // the still: the room as it is locked off. The turn lands on it (join 0) or is dissolved onto it.
+    t = performance.now(); LK.phase = 'hold';
+    const vs = await lkWithin(pStill, 6000);
+    run.ph.stillWait = Math.round(performance.now() - t);
+    if (!lkAlive(run)) return lkEnded(run, false);
+    run.still = (vs && lkGrab(vs)) || last;
+    if (run.early) { run.still = run.early; LK.base = run.still; }   // (already dissolved in over the end of the turn)
+    else if (run.still !== last) { LK.base = run.still; if (L.join > 0 && last) LK.dis = { cv: last, t0: performance.now(), ms: L.join * 1000 }; }
+    run.vs = vs;
+    try { if (LK_HOLD[name]) await LK_HOLD[name](run, L, vs); else await lkSleep(run, 3000); } catch (e) { nlog('look', { look: run.as, holdError: String((e && e.message) || e).slice(0, 120) }); }   // (the hold never takes the night down)
+    run.ph.hold = Math.round(performance.now() - t);
+    if (!lkAlive(run)) return lkEnded(run, false);
+    // OUT
+    t = performance.now(); LK.phase = 'out';
+    if (LK.vid && LK.vid.readyState >= 2) LK.base = lkGrab(LK.vid) || LK.base;   // the hold's last frame covers the way back's load
+    for (const k of [...LK.keep]) if (k !== lkId(L.out.src)) LK.keep.delete(k);
+    const vout = await lkReady(L.out.src, L.out.from, 5000);
+    run.ph.outWait = Math.round(performance.now() - t); t = performance.now();
+    if (!lkAlive(run)) return lkEnded(run, false);
+    LK.over = run.overOut || null; LK.zoom = null; LK.dis = null;
+    if (vout) {
+      LK.base = null; LK.vid = vout; LK.fade = { kind: 'out', el: vout, to: L.out.to, ms: LK_FADE };
+      await lkPlay(vout, L.out, { log: run.media.out });
+    } else {
+      nlog('look', { look: run.as, out: 'no film: dissolved' });
+      LK.fade = { kind: 'dissolve', t0: performance.now(), ms: 700 };
+      await lkSleep(run, 720);
+    }
+    run.ph.out = Math.round(performance.now() - t);
+    return lkEnded(run, true);
+  }
+  function lkHideLine(on) { const el = document.getElementById('ta'); if (el) el.style.visibility = on ? 'hidden' : ''; }
+  // The look is over (or was stopped): the table, as it is; what changed while the view was away.
+  function lkEnded(run, ok) {
+    const live = lkAlive(run);
+    if (run.o.spell) lkHideLine(false);
+    if (LK.run === run) {
+      LK.on = false; LK.run = null; LK.vid = LK.base = LK.dis = LK.over = LK.zoom = LK.fade = LK.slide = null; LK.phase = '';
+      LK.keep.clear();
+    }
+    if (!LK.run) for (const [k, v] of [...PV.vids]) if (k.startsWith('look:')) dropClip(k, v);   // their decoders go back to the night
+    const ms = Math.round(performance.now() - run.t0);
+    LK.lastEnd = G.t;
+    LK.log.push({ look: run.as, ok: ok && live, ph: run.ph, media: run.media || null, ms, uncalled: !!run.o.uncalled });
+    if (LK.log.length > 60) LK.log.shift();
+    nlog('lookEnd', { look: run.as, ok: ok && live, ms, ...run.ph });
+    if (ok && live) {
+      lkSounds(false, 1.2);
+      try { (LK_AFTER[run.name] || lkChange)(run); } catch (e) { /* fine */ }
+      if (run.o.uncalled) noteHouse('look-' + run.as);
+    } else lkSounds(true);
+    const nx = LK.next; LK.next = null;
+    if (nx && !halt) setTimeout(() => { if (!LK.run && !halt) lookAt(nx.where, nx.o); }, 1200);
+    return ok && live;
+  }
+  // One thing has changed on the table (DIRECTION.md 4: twice a night at most, or it is a trick they can see): the piece is on another
+  // letter, or a candle gutters. Past twice, only the room's own change (the clock's late tick, the microwave still beeping).
+  function lkChange(run) {
+    if (LK.changes >= 2) return;
+    const free = P.mode === 'free' && !P.dragging && !P.path && !S.busy && !S.possessing && !S.struggling && !PON.stage && !BYE.on;
+    if (free && Math.random() < 0.6) {
+      const keys = Object.keys(GLYPHS).filter((k) => /^[A-Z]$/.test(k)), k = pick(keys), gl = GLYPHS[k], p = offFaces(gl.x, gl.y);
+      dropPath(); P.x = P.tx = p.x; P.y = P.ty = p.y; P.vx = P.vy = 0; P.snap = true;   // it is somewhere else: nobody heard it go
+      LK.changes++; nlog('lookChange', { look: run.as, piece: k });
+      return;
+    }
+    const lit = [0, 1].filter((i) => G.candleOutT[i] < 1);
+    if (lit.length) { G.gutter = 1; G.gutterWho = pick(lit); LK.changes++; nlog('lookChange', { look: run.as, gutter: G.gutterWho }); }
+  }
+
+  // ---- the rooms' own parts
+  const LK_PRE = {}, LK_HOLD = {}, LK_AFTER = {};
+  // The cat clock (13.12): the hands at the player's own time, a second hand that ticks with the clock's own ticking, the eyes and tail
+  // swinging (T-CAT-SWING, which starts and ends on K-CLOCK, eyes and tail dead centre: a loop made for looping), slowing by degrees until
+  // on the last tick they stop dead centre; then the clockwork is quiet; then the view goes back, and the wall clock's next tick is late.
+  const CATCLK = { sec: 0, h: 0, m: 0, stopped: false, timer: 0 };
+  function lkClockHands(L) {
+    return (g, M) => {
+      const [fx, fy, fr] = L.face, x = M.x(fx), y = M.y(fy), r = fr * M.k;
+      const hand = (ang, len, wid, back) => {
+        const s = Math.sin(ang), c = -Math.cos(ang);
+        g.beginPath();
+        g.moveTo(x - s * back * r + c * wid * r * 0.5, y - c * back * r - s * wid * r * 0.5);
+        g.lineTo(x + s * len * r + c * wid * r * 0.18, y + c * len * r - s * wid * r * 0.18);
+        g.lineTo(x + s * (len + 0.04) * r, y + c * (len + 0.04) * r);
+        g.lineTo(x + s * len * r - c * wid * r * 0.18, y + c * len * r + s * wid * r * 0.18);
+        g.lineTo(x - s * back * r - c * wid * r * 0.5, y - c * back * r + s * wid * r * 0.5);
+        g.closePath(); g.fill();
+      };
+      const sec = CATCLK.sec, m = CATCLK.m + sec / 60, h = (CATCLK.h % 12) + m / 60;
+      g.save();
+      g.shadowColor = 'rgba(0,0,0,.4)'; g.shadowBlur = 3 * M.k; g.shadowOffsetX = 2 * M.k; g.shadowOffsetY = 2.5 * M.k;
+      g.fillStyle = 'rgba(16,13,12,.95)';
+      hand((h / 12) * Math.PI * 2, 0.5, 0.11, 0.12);
+      hand((m / 60) * Math.PI * 2, 0.78, 0.08, 0.14);
+      g.fillStyle = 'rgba(28,18,16,.9)';
+      hand((sec / 60) * Math.PI * 2, 0.86, 0.025, 0.2);
+      g.shadowColor = 'transparent';
+      g.fillStyle = 'rgba(20,16,14,1)'; g.beginPath(); g.arc(x, y, 0.07 * r, 0, Math.PI * 2); g.fill();
+      g.restore();
+    };
+  }
+  function lkClockTick(pos) {
+    // one tick of the recorded clockwork (its ticks are one a second, the first 0.03 s in): a slice of one
+    return lkRec('cat-clock', pos, 0.55, { off: Math.floor(rnd(0, 5)) + 0.0, dur: 0.32, pick: 0 });
+  }
+  LK_HOLD.clock = async (run, L, vs) => {
+    const d = new Date(); CATCLK.h = d.getHours(); CATCLK.m = d.getMinutes(); CATCLK.sec = d.getSeconds(); CATCLK.stopped = false;
+    LK.over = lkClockHands(L);
+    // the seconds: on the real second, a tick and the hand
+    const tickOn = () => {
+      if (CATCLK.stopped || !lkAlive(run)) return;
+      const n = new Date(); CATCLK.h = n.getHours(); CATCLK.m = n.getMinutes(); CATCLK.sec = n.getSeconds();
+      lkClockTick(LK_AHEAD);
+      CATCLK.timer = setTimeout(tickOn, 1000 - (Date.now() % 1000) + 2);
+    };
+    CATCLK.timer = setTimeout(tickOn, 1000 - (Date.now() % 1000) + 2);
+    lkReady(L.out.src, L.out.from, 9000);   // the way back, loading while the clock swings
+    const el = vs; if (!el) { await lkSleep(run, 4000); CATCLK.stopped = true; clearTimeout(CATCLK.timer); return; }
+    LK.vid = el;
+    el.loop = true; el.playbackRate = 1;
+    const p = el.play(); if (p && p.catch) p.catch(() => {});
+    if (!(await lkSleep(run, 3200))) { CATCLK.stopped = true; return; }
+    // the swing slows by degrees, then stops dead centre
+    const t0 = performance.now(), cen = L.hold.centre || [L.still.at];
+    let prev = el.currentTime;
+    await new Promise((res) => {
+      const step = () => {
+        if (!lkAlive(run)) { res(); return; }
+        const e = clamp((performance.now() - t0) / 3600, 0, 1), rate = lerp(1, 0.28, e * (2 - e));
+        try { el.playbackRate = rate; } catch (x) { /* fine */ }
+        const t = el.currentTime, wrapped = t < prev - 1;
+        const hit = e >= 0.75 && cen.find((c) => (wrapped ? (c > prev || c <= t) : (c > prev && c <= t)));
+        if (hit != null && hit !== false) {
+          el.pause(); try { el.currentTime = hit; } catch (x) { /* fine */ }
+          clearTimeout(CATCLK.timer);
+          const n = new Date(); CATCLK.sec = n.getSeconds(); CATCLK.m = n.getMinutes(); CATCLK.h = n.getHours();
+          lkClockTick(LK_AHEAD);   // the last tick
+          CATCLK.stopped = true; run.stopAt = performance.now();
+          nlog('look', { look: run.as, stopped: 'dead centre', at: +hit.toFixed(2), h: CATCLK.h, m: CATCLK.m, s: CATCLK.sec });
+          res(); return;
+        }
+        if (performance.now() - t0 > 12000) { el.pause(); CATCLK.stopped = true; clearTimeout(CATCLK.timer); res(); return; }
+        prev = t; setTimeout(step, 16);
+      };
+      step();
+    });
+    // the clockwork is quiet: nothing
+    await lkSleep(run, 1100);
+    run.overOut = lkFadeOver(LK.over, 260);   // the hands go as the view turns away (OUT starts on the same still)
+  };
+  // back at the table the wall clock's next tick is late
+  LK_AFTER.clock = (run) => {
+    if (!A.clockState || A.clockState() !== 'ticking') return;
+    A.clock(false);
+    setTimeout(() => { if (halt) return; A.tick(); A.clock(true); }, 1750);
+    nlog('lookChange', { look: run.as, clock: 'late' });
+  };
+  // The microwave (13.12), heard before it is seen: a keypad pressed in the next room, a run of beeps, never the same run twice (a slice of
+  // one of four recorded takes, a different place and length each time). Its display is the engine's: seven green segments in the display's
+  // quad, the real time, a fast dull cycle of numbers a person might type, slowing, and resting on 6:66; then the long tone; and the beeps
+  // keep coming after the view has gone back.
+  const MICRO = { text: '', lastRun: '' };
+  function microKeys(at, vol) {
+    // a run: which take, from where in it, how long; never the one just played
+    let key = '';
+    for (let i = 0; i < 6; i++) {
+      const pk = Math.floor(rnd(0, 4)), off = +rnd(0, pk === 0 ? 1.2 : pk === 1 ? 2.6 : 3.4).toFixed(1), dur = +rnd(0.6, 2).toFixed(1);
+      key = pk + ':' + off + ':' + dur;
+      if (key !== MICRO.lastRun) { MICRO.lastRun = key; return lkRec('micro-keys', at, vol == null ? 0.5 : vol, { off, dur, pick: pk, cut: at === LK_AHEAD ? 0 : 3200, wet: 0.25 }); }
+    }
+    return 0;
+  }
+  const MICRO_RIGHT = { x: 3.6, y: 0.1, z: -0.4 };
+  // the seven segments of a digit, in a cell (0..1 across, 0..1 down): a b c d e f g
+  const SEG7 = { 0: 'abcdef', 1: 'bc', 2: 'abged', 3: 'abgcd', 4: 'fgbc', 5: 'afgcd', 6: 'afgedc', 7: 'abc', 8: 'abcdefg', 9: 'abcfgd' };
+  function lkMicroDisplay(L) {
+    return (g, M) => {
+      const q = lkQuad(L.display, M), corners = [q(0, 0), q(1, 0), q(1, 1), q(0, 1)];
+      g.save();
+      g.fillStyle = 'rgba(5,9,7,.96)'; lkPath(g, corners); g.fill();
+      const txt = MICRO.text || '', m = /^(\d{0,2}):(\d\d)$/.exec(txt);
+      if (m) {
+        const digits = (m[1].padStart(2, ' ') + m[2]).split(''), cells = [[0.07, 0.25], [0.28, 0.46], [0.56, 0.74], [0.77, 0.95]];
+        const seg = (u0, u1, k) => {
+          const v0 = 0.2, v1 = 0.8, w = 0.035, vm = 0.5, h = 0.06;
+          const S = { a: [[u0 + w, v0], [u1 - w, v0], [u1 - w, v0 + h], [u0 + w, v0 + h]], g: [[u0 + w, vm - h / 2], [u1 - w, vm - h / 2], [u1 - w, vm + h / 2], [u0 + w, vm + h / 2]],
+            d: [[u0 + w, v1 - h], [u1 - w, v1 - h], [u1 - w, v1], [u0 + w, v1]], f: [[u0, v0 + h], [u0 + w * 1.4, v0 + h], [u0 + w * 1.4, vm - h / 2], [u0, vm - h / 2]],
+            b: [[u1 - w * 1.4, v0 + h], [u1, v0 + h], [u1, vm - h / 2], [u1 - w * 1.4, vm - h / 2]], e: [[u0, vm + h / 2], [u0 + w * 1.4, vm + h / 2], [u0 + w * 1.4, v1 - h], [u0, v1 - h]],
+            c: [[u1 - w * 1.4, vm + h / 2], [u1, vm + h / 2], [u1, v1 - h], [u1 - w * 1.4, v1 - h]] }[k];
+          lkPath(g, S.map(([u, v]) => q(u, v))); g.fill();
+        };
+        digits.forEach((dg, i) => {
+          const [u0, u1] = cells[i];
+          g.fillStyle = 'rgba(60,120,70,.10)'; 'abcdefg'.split('').forEach((k) => seg(u0, u1, k));
+          if (dg === ' ') return;
+          g.fillStyle = 'rgba(120,255,150,.95)'; g.shadowColor = 'rgba(80,255,120,.9)'; g.shadowBlur = 4 * M.k;
+          SEG7[dg].split('').forEach((k) => seg(u0, u1, k));
+          g.shadowBlur = 0;
+        });
+        g.fillStyle = 'rgba(120,255,150,.95)';
+        [0.38, 0.62].forEach((v) => { lkPath(g, [q(0.5, v - 0.05), q(0.53, v - 0.05), q(0.53, v + 0.05), q(0.5, v + 0.05)]); g.fill(); });
+      }
+      // its glow on the door and the counter
+      const c = q(0.5, 0.5), gr = g.createRadialGradient(c[0], c[1], 0, c[0], c[1], 60 * M.k);
+      gr.addColorStop(0, 'rgba(90,255,130,.10)'); gr.addColorStop(1, 'rgba(90,255,130,0)');
+      g.globalCompositeOperation = 'lighter'; g.fillStyle = gr; g.fillRect(c[0] - 60 * M.k, c[1] - 60 * M.k, 120 * M.k, 120 * M.k);
+      g.restore();
+    };
+  }
+  const MICRO_TYPED = ['1:00', '0:30', '2:00', '1:30', '0:45', '3:00', '5:00', '1:11', '0:10', '2:30', '9:99', '0:00', '10:00', '4:00', '0:15'];
+  LK_PRE.micro = () => { microKeys(MICRO_RIGHT, 0.45); };   // heard before it is seen
+  LK_HOLD.micro = async (run, L, vs) => {
+    const d = new Date(); MICRO.text = (d.getHours() % 12 || 12) + ':' + String(d.getMinutes()).padStart(2, '0');
+    LK.over = lkMicroDisplay(L);
+    const [x, y] = [(L.display[0][0] + L.display[2][0]) / 2, (L.display[0][1] + L.display[2][1]) / 2];
+    // the head leans in to read it
+    LK.zoom = { x, y, from: 1, to: 1.75, max: 1.75, k: 1, t0: performance.now() + (L.join || 0) * 1000, ms: 1900 };
+    run.ph.time = MICRO.text;
+    if (!(await lkSleep(run, 1500 + (L.join || 0) * 1000))) return;
+    microKeys(LK_AHEAD, 0.5);
+    // fast and dull
+    const seq = MICRO_TYPED.slice().sort(() => Math.random() - 0.5).slice(0, 10);
+    for (const v of seq) { MICRO.text = v; if (!(await lkSleep(run, rnd(110, 170)))) return; }
+    // slowing, and resting on 6:66
+    const slow = ['3:33', '6:00', '6:06', '6:60', '6:66'], gaps = [260, 380, 520, 700, 0];
+    for (let i = 0; i < slow.length; i++) { MICRO.text = slow[i]; if (gaps[i] && !(await lkSleep(run, gaps[i]))) return; }
+    run.ph.rest = MICRO.text;
+    nlog('look', { look: run.as, display: MICRO.text });
+    if (!(await lkSleep(run, 900))) return;
+    lkRec('micro-done', LK_AHEAD, 0.55, { hold: true });   // beep, beep, beep, the long tone
+    if (!(await lkSleep(run, 2200))) return;
+    LK.zoom = { x, y, from: LK.zoom ? LK.zoom.k : 1.75, to: 1, max: 1.75, k: LK.zoom ? LK.zoom.k : 1.75, t0: performance.now(), ms: 650 };
+    await lkSleep(run, 680);
+    LK.zoom = null;
+    run.overOut = lkFadeOver(LK.over, 260);
+  };
+  // the beeps keep coming after the view has gone back
+  LK_AFTER.micro = (run) => {
+    const n = nightNo;
+    [rnd(1400, 2400), rnd(5200, 8000)].forEach((ms) => setTimeout(() => { if (!halt && nightNo === n) microKeys(MICRO_RIGHT, 0.45); }, ms));
+  };
+  // The television (13.12): it comes on by itself. TV-BROADCAST already carries its picture in the frame (the test pattern, the empty studio and its
+  // one armchair); then TV-ROLL's flash tears it, and the engine draws live snow in the screen's quad; in the snow, for one frame each, the
+  // letters of the last line the demon spelled, below the threshold of being read.
+  function lkSnow() {
+    if (lkStatic) return lkStatic;
+    lkStatic = [];
+    for (let i = 0; i < 6; i++) {
+      const c = document.createElement('canvas'); c.width = 160; c.height = 120;
+      const g = c.getContext('2d'), im = g.createImageData(160, 120);
+      for (let y = 0; y < 120; y++) { const row = 0.75 + Math.random() * 0.5; for (let x = 0; x < 160; x++) { const v = Math.min(255, Math.random() * 255 * row), o = (y * 160 + x) * 4; im.data[o] = im.data[o + 1] = im.data[o + 2] = v; im.data[o + 3] = 255; } }
+      g.putImageData(im, 0, 0); lkStatic.push(c);
+    }
+    return lkStatic;
+  }
+  function lkTvSnow(L, line) {
+    const letters = String(line || '').replace(/[^A-Z0-9]/g, '').split('');
+    let li = 0, fr = 0;
+    return (g, M) => {
+      const q = lkQuad(L.screen, M), pts = [q(0, 0), q(1, 0), q(1, 1), q(0, 1)];
+      const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]), x0 = Math.min(...xs), y0 = Math.min(...ys), w = Math.max(...xs) - x0, h = Math.max(...ys) - y0;
+      g.save(); lkPath(g, pts); g.clip();
+      const sn = lkSnow(), roll = Math.random() * h;
+      g.imageSmoothingEnabled = true;
+      g.drawImage(sn[(Math.random() * sn.length) | 0], x0, y0 - roll, w, h); g.drawImage(sn[(Math.random() * sn.length) | 0], x0, y0 - roll + h, w, h);
+      g.fillStyle = 'rgba(0,0,0,.25)'; for (let yy = y0; yy < y0 + h; yy += 3 * M.k) g.fillRect(x0, yy, w, 1 * M.k);
+      // one letter, one frame, now and then
+      fr++;
+      if (letters.length && fr % 6 === 0) {
+        const ch = letters[li++ % letters.length];
+        g.fillStyle = 'rgba(235,235,235,.5)'; g.font = `bold ${Math.round(h * 0.62)}px Georgia, serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(ch, x0 + w / 2, y0 + h / 2);
+        LK.tvLetters = (LK.tvLetters || 0) + 1;
+      }
+      g.restore();
+      // the snow lights the room a little
+      const c = q(0.5, 0.5), gr = g.createRadialGradient(c[0], c[1], 0, c[0], c[1], w * 1.4);
+      gr.addColorStop(0, `rgba(170,180,200,${0.05 + Math.random() * 0.04})`); gr.addColorStop(1, 'rgba(170,180,200,0)');
+      g.save(); g.globalCompositeOperation = 'lighter'; g.fillStyle = gr; g.fillRect(c[0] - w * 1.4, c[1] - w * 1.4, w * 2.8, w * 2.8); g.restore();
+    };
+  }
+  LK_PRE.tv = () => { lkSnow(); };   // (the snow is made before it is needed, never inside a frame)
+  LK_HOLD.tv = async (run, L, vs) => {
+    if (!vs) { await lkSleep(run, 2500); return; }
+    LK.vid = vs;
+    lkRec('tv-on', LK_AHEAD, 0.6);
+    const pTear = L.tear ? lkReady(L.tear.src, L.tear.from, 60000) : null;
+    await lkPlay(vs, L.hold);
+    if (!lkAlive(run)) return;
+    LK.base = lkGrab(vs) || LK.base; LK.vid = null; lkRelease(L.hold.src);   // the studio holds while the tear loads
+    const vt = await lkWithin(pTear, 4000);
+    if (!lkAlive(run)) return;
+    if (vt) { LK.vid = vt; await lkPlay(vt, L.tear); }
+    if (!lkAlive(run)) return;
+    lkRelease(L.hold.src);
+    lkReady(L.out.src, L.out.from, 9000);   // the way back loads under the snow
+    const lines = NIGHT.spelledLines, line = lines.length ? lines[lines.length - 1] : '';
+    LK.tvLetters = 0;
+    LK.over = lkTvSnow(L, line);
+    lkRec('static', LK_AHEAD, 0.4, { hold: true });
+    run.ph.line = line;
+    await lkSleep(run, 3400);
+    run.ph.letters = LK.tvLetters;
+    // the snow stays on the screen as the view turns away, and dies with the turn
+    run.overOut = lkFadeOver(LK.over, 300);
+  };
+  // The abacus (13.12): one bead a clack, as many as the demon says (A-BEAD's slide, 1.72 to 3.38, played once a count, the clack where it
+  // stops); more than ten is every bead in a rush (A-RUSH, the house's); and once a night, after a count, one bead moves by itself (A-AFTER).
+  const LK_BEAD_AT = { x: 0.35, y: -0.1, z: -2.2 };
+  LK_HOLD.abacus = async (run, L, vs) => {
+    if (!vs) { await lkSleep(run, 2500); return; }
+    LK.vid = vs;
+    if (!(await lkSleep(run, 500 + (L.join || 0) * 1000))) return;
+    const n = run.beads;
+    run.ph.beads = 0;
+    if (n > 10 && L.rush) {
+      LK.base = lkGrab(vs) || LK.base; LK.vid = null; lkRelease(L.still.src);
+      const vr = await lkReady(L.rush.src, L.rush.from, 5000);
+      if (vr && lkAlive(run)) {
+        LK.vid = vr; lkRelease(L.still.src);
+        for (let i = 0; i < 14; i++) setTimeout(() => { if (lkAlive(run)) A.bead && A.bead(LK_BEAD_AT, rnd(0.3, 0.7)); }, 350 + i * rnd(25, 60));
+        await lkPlay(vr, L.rush); run.ph.beads = n; run.ph.rush = true;
+        nlog('look', { look: run.as, rush: n });
+        await lkSleep(run, 900);
+        return;
+      }
+    }
+    const wantAfter = n > 0 && !LK.afterDone && L.after;
+    let pAfter = wantAfter ? lkReady(L.after.src, L.after.from, 60000) : null;   // (loads now when a second decoder is free; else once the bead's is let go)
+    for (let i = 0; i < n; i++) {
+      if (!lkAlive(run)) return;
+      if (i) { await lkSeek(vs, L.bead.from, 600); }
+      else if (Math.abs(vs.currentTime - L.bead.from) > 0.05) await lkSeek(vs, L.bead.from, 800);
+      await lkPlay(vs, L.bead, { rate: 1.8 });
+      if (!lkAlive(run)) return;
+      A.bead && A.bead(LK_BEAD_AT, 0.75);
+      run.ph.beads = i + 1;
+      nlog('bead', { n: i + 1, of: n });
+      await lkSleep(run, 160);
+    }
+    if (n > 0) nlog('look', { look: run.as, counted: run.ph.beads });
+    if (wantAfter) {
+      LK.base = lkGrab(vs) || LK.base; LK.vid = null; lkRelease(L.still.src);
+      if (!(await lkSleep(run, 1300))) return;
+      const va = await lkWithin(pAfter, 4000);
+      if (va && lkAlive(run)) {
+        LK.afterDone = true; LK.vid = va; lkRelease(L.still.src);
+        await lkPlay(va, L.after);
+        A.bead && A.bead(LK_BEAD_AT, 0.45);
+        run.ph.after = true; nlog('look', { look: run.as, after: true });
+      }
+    }
+    await lkSleep(run, n ? 900 : 2600);
+  };
+  // The hall (12): left, dark; something far down it.
+  LK_HOLD.hall = async (run, L, vs) => {
+    if (!(await lkSleep(run, 900))) return;
+    lkRec('house-far', { x: 0.4, y: 0.2, z: -7 }, 0.45);
+    await lkSleep(run, 2300);
+  };
+  // The ceiling (13.3): the lift that does not stop. Held on the plaster: the bulb swings as if pushed (L-CEIL-LAMP), the stain darkens, and
+  // sometimes the moon's face is in the plaster, huge and faint, looking down: drawn by the moon's own face code (drawFace, untouched), at six
+  // times its radius on the board, never a new drawing of it. quick (look up): up, the plaster, back down; the lamp still the first time, swinging after.
+  let lkMoonCv = null;
+  function lkMoonFace(R) {
+    const f = FACE.moon, at = f.at, size = Math.ceil(R * 2.4);
+    if (!lkMoonCv || lkMoonCv.width !== size) { lkMoonCv = document.createElement('canvas'); lkMoonCv.width = lkMoonCv.height = size; }
+    const g = lkMoonCv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, size, size);
+    const lx = f.lx, ly = f.ly, fs = G.faceShow;
+    f.lx = 0; f.ly = 0.25; G.faceShow = 1;   // it looks straight down at them
+    try { g.translate(size / 2, size / 2); g.scale(R / at.r, R / at.r); g.translate(-at.x, -at.y); drawFace(g, 'moon'); } finally { f.lx = lx; f.ly = ly; G.faceShow = fs; }
+    return lkMoonCv;
+  }
+  function lkCeilOver(L, run) {
+    const t0 = performance.now();
+    // six times the moon's radius on the board, as it is on this screen
+    const R = 6 * FACE.moon.at.r * BOARD.s * CAM.s * DPR, moon = run.moon ? lkMoonFace(R) : null;
+    run.ph.moonR = Math.round(R);
+    return (g, M, now) => {
+      const e = (now - t0) / 1000;
+      // the stain darkens and spreads from its edge
+      const [sx, sy, sr] = L.stain, k = clamp(e / 14, 0, 1), cxS = M.x(sx), cyS = M.y(sy), rr = sr * M.k * (0.8 + 0.5 * k);
+      const gr = g.createRadialGradient(cxS, cyS, rr * 0.2, cxS, cyS, rr);
+      gr.addColorStop(0, `rgba(70,38,14,${0.32 * k})`); gr.addColorStop(0.7, `rgba(90,50,18,${0.22 * k})`); gr.addColorStop(1, 'rgba(90,50,18,0)');
+      g.save(); g.globalCompositeOperation = 'multiply'; g.fillStyle = gr; g.fillRect(cxS - rr, cyS - rr, rr * 2, rr * 2); g.restore();
+      if (moon) {
+        const out = run.moonOut ? clamp(1 - (now - run.moonOut) / 250, 0, 1) : 1, a = clamp((e - 1.2) / 2.2, 0, 1) * 0.3 * out;
+        if (a > 0.004) {
+          const mx = M.x(L.moon[0]), my = M.y(L.moon[1]), sz = moon.width * M.k / Math.max(cv.width / M.fw, cv.height / M.fh);
+          g.save(); g.globalAlpha *= a; g.globalCompositeOperation = 'multiply';
+          g.drawImage(moon, mx - sz / 2, my - sz / 2, sz, sz);
+          g.restore();
+          LK.moonShown = Math.max(LK.moonShown || 0, a);
+        }
+      }
+    };
+  }
+  LK_HOLD.ceiling = async (run, L, vs) => {
+    const o = run.o;
+    run.moon = !!o.moon || (!o.quick && Math.random() < 0.5);
+    LK.over = lkCeilOver(L, run);
+    lkRec('ceiling', LK_AHEAD, 0.5);
+    lkReady(L.out.src, L.out.from, 12000);
+    const swing = vs && (!o.quick || LK.quick > 0);
+    if (o.quick) LK.quick++;
+    let spelled = null;
+    // the line is spelled while they look up, and they see it only when the view is back down (the transcript waits with the view)
+    if (o.spell) { lkHideLine(true); spelled = Promise.resolve().then(o.spell).catch(() => {}); }
+    const t0 = performance.now();
+    if (swing) {
+      LK.vid = vs; const seg = o.quick ? { to: Math.min(L.hold.to, 3.6) } : L.hold;
+      if (o.quick) await lkSeek(vs, 0.8, 600);
+      await lkPlay(vs, seg); run.ph.lamp = true;
+    } else await lkSleep(run, o.quick ? 1400 : 4000);
+    if (!lkAlive(run)) return;
+    // the line is spelled while they look up (twelve seconds of the piece heard moving, or as long as the line takes): down once it is
+    // (or at thirty-five seconds), never so long after that the line has begun to fade from the transcript (it settles four seconds after)
+    let done = false; if (spelled) spelled.then(() => { done = true; });
+    const min = o.minHold || (o.quick ? 0 : 6500);
+    while (lkAlive(run) && performance.now() - t0 < min && !done) await lkSleep(run, 100);
+    if (spelled) { await Promise.race([spelled, sleep(Math.max(0, 35000 - (performance.now() - t0)))]); run.ph.spelled = done; await lkSleep(run, 600); }
+    run.moonOut = performance.now();
+    run.overOut = null;
+  };
+  // ---- the cutaways (DIRECTION.md 4): a hard cut to the clip's first frame, the clip, a hard cut back
+  async function lkCut(name, o = {}) {
+    const L = PL && PL.looks && PL.looks[name], C = LK_CUT[name] || { at: { x: 0, y: 0, z: 3 }, snd: [] };
+    if (!L || !L.cut || !L.cut.length) { nlog('look', { look: name, have: false }); return false; }
+    const run = { name, as: name, g: haltGen, night: nightNo, t0: performance.now(), o, ph: {}, media: { cut: [] } };
+    LK.run = run; LK.keep.clear(); LK.phase = 'loading';
+    const segs = L.cut, first = lkReady(segs[0].src, segs[0].from, 12000);
+    if (segs[1]) lkReady(segs[1].src, segs[1].from, 60000);
+    const v0 = await first;
+    if (!v0 || !lkAlive(run)) {
+      if (LK.run === run) { LK.run = null; LK.keep.clear(); }
+      nlog('look', { look: name, have: false, why: v0 ? 'stopped' : 'not ready' });
+      return false;
+    }
+    nlog('look', { look: name, have: true, cut: true, uncalled: !!o.uncalled });
+    LK.seen.add(name);
+    let t = performance.now();
+    LK.on = true; LK.phase = 'cut'; LK.vid = v0; LK.base = null; LK.slide = null; LK.fade = null; LK.over = null;
+    const bed = (C.snd || []).map(([k, s, v]) => setTimeout(() => {
+      if (!lkAlive(run)) return;
+      if (k === 'drip') A.drip && A.drip(C.at, v);
+      else if (k === 'pass') A.pass && A.pass();
+      else if (k === 'knock3') { A.knock && A.knock(3, C.at.x, C.at.z); rumble(160, 0.3, 0.1); }
+      else if (k === 'breath') { const was = A.bedState && A.bedState().noCrickets; A.breath && A.breath('right'); if (A.noCrickets && !was) { A.noCrickets(true); run.crickets = true; } }
+      else lkRec(k, C.at, v);
+    }, s * 1000));
+    for (let i = 0; i < segs.length; i++) {
+      if (i) { LK.base = lkGrab(LK.vid) || LK.base; LK.vid = null; lkRelease(segs[i - 1].src); }
+      const tw = performance.now();
+      const el = i ? await lkReady(segs[i].src, segs[i].from, 4000) : v0;
+      t += performance.now() - tw; run.ph.cutWait = (run.ph.cutWait || 0) + Math.round(performance.now() - tw);
+      if (!lkAlive(run)) break;
+      if (!el) break;
+      LK.vid = el; if (i) lkRelease(segs[i - 1].src);
+      if (segs[i].hold) { const th = performance.now(); await lkSleep(run, segs[i].hold * 1000); run.media.cut.push([segs[i].from, +(segs[i].from + (performance.now() - th) / 1000).toFixed(2)]); }
+      else await lkPlay(el, segs[i], { log: run.media.cut });
+      if (!lkAlive(run)) break;
+    }
+    bed.forEach(clearTimeout);
+    if (run.crickets) setTimeout(() => { if (A.noCrickets) A.noCrickets(false); }, 2500);   // the crickets come back after it
+    run.ph.cut = Math.round(performance.now() - t);
+    return lkEnded(run, lkAlive(run));
+  }
+  // ---- the calls
+  // What the demon may call (LOOKS), and what plays: up is the quick ceiling, left the hall, right the cat clock. A name with no film draws nothing.
+  const LK_AS = { up: ['ceiling', { quick: true }], left: ['hall'], right: ['clock'] };
+  function looksLookAt(where, o = {}) {
+    where = String(where || '');
+    if (!where) return Promise.resolve(false);
+    if (halt || !PL) { nlog('look', { look: where, have: false, why: 'stopped' }); return Promise.resolve(false); }
+    if (LK.run) {
+      if (LK.run.as === where) return Promise.resolve(false);
+      if (!LK.next) LK.next = { where, o };   // one waits its turn
+      nlog('look', { look: where, queued: true });
+      return Promise.resolve(false);
+    }
+    const [name, extra] = LK_AS[where] || [where];
+    const opts = Object.assign({ as: where }, extra || {}, o);
+    if (LK_ROOM[name]) return lkRoom(name, opts).catch((e) => { if (LK.run) lkStop('error'); nlog('look', { look: where, error: String(e && e.message || e).slice(0, 80) }); return false; });
+    const L = PL.looks && PL.looks[name];
+    if (L && L.cut) return lkCut(name, opts).catch((e) => { if (LK.run) lkStop('error'); nlog('look', { look: where, error: String(e && e.message || e).slice(0, 80) }); return false; });
+    nlog('look', { look: where, have: false });
+    return Promise.resolve(false);
+  }
+  // The abacus counts: one bead a clack. Called with the look at the abacus, it joins it (while the turn is on its way or the beads have not
+  // begun); otherwise it turns to the abacus itself.
+  function looksCount(n) {
+    n = Math.max(0, Math.min(30, Math.round(+n) || 0));
+    if (!n) return Promise.resolve(false);
+    if (LK.run && LK.run.name === 'abacus' && !LK.run.ph.beads && LK.phase !== 'out') { LK.run.beads = n; nlog('count', { count: n, joined: true }); return Promise.resolve(true); }
+    nlog('count', { count: n });
+    return looksLookAt('abacus', { beads: n });
+  }
+  // ---- uncalled (13.12; DIRECTION.md 4: "From the third on, the view turns or the frame cuts without a word ... the guest has lost the
+  // camera"). From dread 3, the hall or a cutaway, never one already seen tonight, at most two a night; once, in the haunted phase, the view
+  // lifts on its own to the ceiling and holds there while the piece is heard moving, and comes down to a line already spelled (the demon's
+  // own move, asked for while they look up; the house tells it the view went up). The microwave's keypad is heard from the right from dread 2.
+  const LK_UNCALLED = ['hall', 'hallway/door', 'hallway/lamp', 'hallway/shadow', 'door/handle', 'door/knocks', 'door/peephole-2', 'cellar/latch', 'cellar/open', 'stairs/step', 'stairs/light',
+    'window/breath', 'bathroom/drip', 'bathroom/curtain', 'bathroom/mirror'];
+  function lkNight() {
+    if (LK.night === nightNo) return;
+    Object.assign(LK, { night: nightNo, uncalled: 0, unAt: 0, changes: 0, afterDone: false, lookedUp: false, upAt: 0, quick: 0, keysAt: 0, lastEnd: -Infinity });
+    LK.seen.clear();
+  }
+  function lookedUp() {
+    LK.lookedUp = true;
+    noteHouse('look-ceiling');   // the demon is told before its move, so its line is about this
+    return looksLookAt('ceiling', { moon: true, uncalled: true, minHold: 12000, spell: () => ownMove('silence'), as: 'ceiling' });
+  }
+  function lkUncalledTick() {
+    if (!S.started || !S.live || halt || S.ending || S.possessing || S.struggling || S.soft || S.stopping || document.hidden || !PL || !PL.looks) return;
+    lkNight();
+    if (LK.run) return;
+    const free = !S.busy && !(S.queue && S.queue.length) && !composing() && !quiet() && G.t - LK.lastEnd > 25000;
+    // the keypad in the next room
+    if (S.dread >= 2) {
+      if (!LK.keysAt) LK.keysAt = G.t + rnd(6000, 20000);
+      else if (G.t >= LK.keysAt) { microKeys(MICRO_RIGHT, 0.4); LK.keysAt = G.t + rnd(50000, 110000); nlog('event', { name: 'micro-keys' }); }
+    }
+    if (!free || nightSecs() < OPENING_END || G.t - DR.lastHouseAt < HOUSE_GAP || DR.running) return;
+    if (S.haunted && !LK.lookedUp) {
+      if (!LK.upAt) LK.upAt = G.t + rnd(20000, 60000);
+      else if (G.t >= LK.upAt) { DR.lastHouseAt = G.t; lookedUp(); return; }
+    }
+    if (S.dread >= 3 && LK.uncalled < 2) {
+      if (!LK.unAt) LK.unAt = G.t + rnd(30000, 110000);
+      else if (G.t >= LK.unAt) {
+        const pool = LK_UNCALLED.filter((k) => !LK.seen.has(k) && PL.looks[k]);
+        LK.unAt = G.t + rnd(150000, 260000);
+        if (!pool.length) return;
+        LK.uncalled++; DR.lastHouseAt = G.t;
+        looksLookAt(pick(pool), { uncalled: true });
+      }
+    }
+  }
+  setInterval(() => { try { lkUncalledTick(); } catch (e) { /* the house never takes the table down */ } }, 1000);
+  // the demon's sentences for what the house did: one key for every look it can be told about
+  LOOKS.forEach((k) => { if (k) HOUSE_KEYS.add('look-' + k); });
+  LK_UNCALLED.forEach((k) => HOUSE_KEYS.add('look-' + k));
+  // ---- the reel: every room, cutaway and part of the ceiling, and honestly what was never filmed
+  {
+    const add = (name, group, what, status, fire) => REEL.add(name, { group, what, status, fire });
+    add('look:clock', 'look', 'Right, the dining room: the cat clock on floral wallpaper at your real time, eyes and tail swinging, slowing, stopping dead centre on the last tick; back at the table the wall clock ticks late', 'live', () => looksLookAt('clock'));
+    add('look:right', 'look', 'look right: the cat clock (L-LOOK-RIGHT, the plain turn, was never made)', 'live', () => looksLookAt('right'));
+    add('look:micro', 'look', 'Further right, the kitchen doorway: the microwave heard first (keys from the right), its green display at your time, the cycle, resting on 6:66, the long tone, the beeps after', 'live', () => looksLookAt('micro'));
+    add('look:tv', 'look', 'Diagonal left: the television comes on by itself, the test pattern, the empty studio and its armchair, the tear into snow, the last spelled line one letter a frame', 'live', () => looksLookAt('tv'));
+    add('look:abacus', 'look', 'Right and lower: the abacus on the sideboard, at rest', 'live', () => looksLookAt('abacus'));
+    add('look:count', 'look', 'The abacus counts seven: one bead a clack (A-BEAD seven times); once a night a bead moves by itself after (A-AFTER)', 'live', (n) => looksCount(n || 7));
+    add('look:count-rush', 'look', 'A count over ten: every bead in one rush (A-RUSH)', 'live', () => looksCount(20));
+    add('look:abacus-wrong', 'look', 'A-WRONG (the beads stop one short): not wired. A demon that gets a count wrong is the dead mechanic (Pierce, 10-07: "demons misspelliong? getting questions wrong.")', 'made', null);
+    add('look:abacus-countdown', 'look', 'A-COUNTDOWN (the beads slide back one by one): made, not wired; nothing calls a count down', 'made', null);
+    add('look:hall', 'look', 'Left: the dark hallway; something far down it', 'live', () => looksLookAt('hall'));
+    add('look:left', 'look', 'look left: the hall (L-LOOK-LEFT, the plain turn, was never made)', 'live', () => looksLookAt('left'));
+    add('look:up', 'look', 'Look up, quick: up past the far wall to the plaster and back down; the lamp still the first time, swinging after', 'live', () => looksLookAt('up'));
+    add('look:ceiling', 'look', 'The lift that does not stop: the plaster ceiling, the bulb swinging as if pushed, the stain darkening, sometimes the moon in the plaster', 'live', () => looksLookAt('ceiling'));
+    add('look:ceiling-moon', 'look', 'The ceiling with the moon\'s face in the plaster, huge and faint, looking down (the moon\'s own face code at six times its radius)', 'live', () => looksLookAt('ceiling', { moon: true }));
+    add('look:looked-up', 'look', 'YOU LOOKED UP: the view lifts on its own, holds at least twelve seconds while the piece is heard moving, comes down to the line it spelled (once, haunted)', 'live', () => lookedUp());
+    add('look:plain-up', 'look', 'L-LOOK-UP (up and across the room and back): never filmed', 'idea', null);
+    add('look:plain-left', 'look', 'L-LOOK-LEFT (a hallway door at the edge of the light): never filmed', 'idea', null);
+    add('look:plain-right', 'look', 'L-LOOK-RIGHT (a cellar door at the edge of the light): never filmed', 'idea', null);
+    add('look:tv-roll', 'look', 'TV-ROLL: the flash and the tear (2.36 to 3.42 s) are used in look:tv; the rest of it (the set switched off) is not', 'live', () => looksLookAt('tv'));
+    const cut = (k, what) => add('look:' + k, 'cut', what, 'live', () => looksLookAt(k));
+    cut('hallway/door', 'The hall door opens about an inch and stops (C-HALL-DOOR-AJAR; C-HALL-DOOR opens far too wide, both rounds, and is not used)');
+    cut('hallway/lamp', 'The hall bulb flashes and goes out');
+    cut('hallway/shadow', 'A dark band sweeps the hall, from a light nobody can see');
+    cut('door/knocks', 'Three slow knocks on the front door, and the door does not move (C-DOOR-HANDLE\'s first frame, held: C-DOOR-KNOCKS was never made)');
+    cut('cellar/open', 'The cellar door opens an inch onto dark');
+    cut('stairs/light', 'The landing light goes out; light steps up there');
+    cut('bathroom/mirror', 'The mirror mists and one streak clears, no hand (Flow\'s mist is a grey blur that drifts: judge it)');
+    cut('door/handle', 'The front door\'s handle turns (only 2.35 to 3.95 s: before it the knob turns into a lever, Flow\'s)');
+    cut('door/peephole-2', 'The peephole: the drive, and the mailbox gone');
+    cut('door/peephole-3', 'The peephole: the mailbox gone, then far down the drive the house itself, one window lit');
+    cut('cellar/latch', 'The cellar latch lifts by itself and drops');
+    cut('stairs/step', 'The stairs: a tread dips with no one on it (round 2: no dust)');
+    cut('window/breath', 'Breath fogs the kitchen window from outside; the crickets stop');
+    cut('bathroom/drip', 'The tap drips twice');
+    cut('bathroom/curtain', 'The shower curtain swings (the second half of C-BATH-DRIP: not on the demon\'s list, the house\'s only)');
+    ['mantle/pendulum', 'mantle/photo', 'mantle/candle', 'door/peephole-1']
+      .forEach((k) => add('look:' + k, 'cut', 'Never filmed (SHOTLIST.md C)', 'idea', () => looksLookAt(k)));
+    add('sound:micro-keys', 'sound', 'The microwave keypad in the next room, from the right, from dread 2: a run of beeps, never the same run twice', 'live', () => microKeys(MICRO_RIGHT, 0.45));
+  }
+  // what a test reads (GOODBYE.looks)
+  const LOOKS_API = {
+    get on() { return LK.on; }, get phase() { return LK.phase; }, get run() { return LK.run ? { name: LK.run.name, as: LK.run.as, beads: LK.run.beads, ph: LK.run.ph } : null; },
+    get log() { return LK.log.slice(); }, cost(reset) { const c = { ...LK.cost }; if (reset) LK.cost = { n: 0, sum: 0, max: 0, slow: 0 }; return c; }, get frames() { return LK.frames; }, get micro() { return MICRO.text; }, get clock() { return { ...CATCLK }; },
+    get letters() { return LK.tvLetters || 0; }, get moon() { return LK.moonShown || 0; }, get changes() { return LK.changes; },
+    vids() { return [...PV.vids.keys()]; }, stop: () => lkStop('test'), tick: lkUncalledTick, lookedUp, microKeys: () => microKeys(MICRO_RIGHT, 0.45),
+    night() { return { uncalled: LK.uncalled, seen: [...LK.seen], lookedUp: LK.lookedUp, keysAt: LK.keysAt, unAt: LK.unAt, upAt: LK.upAt }; },
+    set(o) { Object.assign(LK, o || {}); },
+    newNight() { LK.night = -1; lkNight(); },
+    house() { return NIGHT.house.slice(); },
+    quietHouse() { NIGHT.tl.forEach((e) => { e.done = true; }); DR.next = Infinity; },   // (a test's: the opening's timed beats and the house's events wait)
+  };
+
   // ---------------------------------------------------------------- house events
   // Every event has a set of looks and each look is used once a night (DIRECTION.md section 8). When the set is spent
   // the event is over for the night. The variation is in the side, the candle and the photograph, never only the timing.
@@ -6164,13 +8247,16 @@
     const last = Object.values(DR.cd).reduce((m, v) => (Number.isFinite(v) && v > m ? v : m), -Infinity);   // (a cooldown given back is undefined)
     if (G.t - last < AMBIENT_AFTER) return false;
     DR.cd.ambient = G.t; nlog('event', { name: 'ambient' });
-    const sd = pick(['left', 'right', 'behind']);
-    switch (pick(['creak', 'breath', 'knock'])) {
-      case 'creak': A.creak(sd); break;
-      case 'breath': A.breath(sd); if (sd !== 'behind') famGust(sd === 'left' ? 1 : -1); break;
-      default: A.knock(pick([1, 2]), SIDE_X[sd], 0.5);
-    }
-    noteHouse('ambient');
+    const sd = pick(['left', 'right', 'behind']), kind = pick(['creak', 'breath', 'knock']);
+    const go = () => {
+      switch (kind) {
+        case 'creak': A.creak(sd); break;
+        case 'breath': A.breath(sd); if (sd !== 'behind') famGust(sd === 'left' ? 1 : -1); break;
+        default: A.knock(pick([1, 2]), SIDE_X[sd], 0.5);
+      }
+      noteHouse('ambient');
+    };
+    if (arcLead('knock')) arcLeadWait(sd).then(() => { if (!halt) go(); }); else go();   // (the sun looks to the side of it first)
     return true;
   }
   function addDread(n) { if (!S.calming) S.dread = clamp(S.dread + n, 0, 10); }
@@ -6509,7 +8595,7 @@
     // a breath behind them, one knock, something passes between them and a candle
     async turn() {
       if (!takeLook('turn')) return;
-      { const sd = pick(['left', 'right']); A.breath(sd); famGust(sd === 'left' ? 1 : -1); }
+      { const sd = pick(['left', 'right']); await arcLeadWait(sd); if (halt) return; A.breath(sd); famGust(sd === 'left' ? 1 : -1); }
       await wait(500);
       A.knock(1, 0, 1.2);
       G.shadow = { t0: G.t, dur: 1700, dir: pick([-1, 1]) }; A.pass();
@@ -6546,6 +8632,7 @@
     // Two hard knocks from directly under the table, centred under the phone, and the table takes a small jolt. Nothing is seen.
     async under() {
       if (!takeLook('under')) return;
+      await arcLeadWait('under'); if (halt) return;   // (the sun looks first)
       DR.jumps++; DR.lastJump = G.t;
       A.knock(2, 0, -0.9, -0.8); jolt(3); setTimeout(() => { if (!halt) jolt(3); }, 300); rumble(220, 0.8, 0.3); buzz([60, 40, 90]);
       noteHouse('under');
@@ -6554,12 +8641,13 @@
     // Footsteps cross the ceiling from one side and stop dead over the table. Nothing is seen; the clock goes on ticking.
     async steps() {
       const d = takeLook('steps'); if (!d) return;
+      await arcLeadWait('above'); if (halt) return;
       const secs = A.steps(d === 'l' ? -1 : 1);
       noteHouse('steps');
       await wait(secs * 1000);
     },
     // one knock, behind you (a beat of the opening's pool)
-    async knock1() { A.knock(1, rnd(-1.6, 1.6), 1.5); rumble(160, 0.4, 0.1); buzz(40); noteHouse('knock1'); await wait(900); },
+    async knock1() { const x = rnd(-1.6, 1.6); await arcLeadWait(x < 0 ? 'left' : 'right'); if (halt) return; A.knock(1, x, 1.5); rumble(160, 0.4, 0.1); buzz(40); noteHouse('knock1'); await wait(900); },
     async calm() { if (takeLook('calm')) await fakeCalm(); },
     async blowout(o = {}) { await blowout(o.timed ? OPENING_OUT : undefined); },
     // You looked away. It didn't. Nothing is said and nothing is seen: when you come back the planchette is somewhere else.
@@ -6651,6 +8739,9 @@
   const firstQ = () => 'Is anyone here?';
   // nothing answers (no site, the site's limit, the model down): said once a night, in pencil, for fifteen seconds
   const OFF_NOTE = "it isn't answering tonight";
+  // After the first try at saying goodbye is lost (they let go; NO is struck through), the pencil under the board says how it is done, in the room, so nobody
+  // is punished for a trick nobody told them (Pierce, 2026-10-08). The second try always wins; tapping the line still asks for it.
+  const BYE_LOST_NOTE = 'hold it until it stops fighting';
   function offNote() {
     if (NIGHT.offNoted) return;
     NIGHT.offNoted = true; S.offNote = OFF_NOTE; nlog('offNote'); renderNote();
@@ -6670,7 +8761,7 @@
     if (!S.started || S.awaitingYesNo || S.struggling || S.possessing || S.ending || S.stopping) { noteEl.hidden = true; noteKey = ''; qb.placeholder = 'Ask it something'; return; }
     let text = '', q = '';
     if (S.offNote && !S.soft) { text = S.offNote; q = ''; }
-    else if (S.soft || S.haunted || S.cleared) { text = 'say goodbye'; q = 'Goodbye'; }
+    else if (S.soft || S.haunted || S.cleared) { text = S.haunted && S.goodbyeTries > 0 ? BYE_LOST_NOTE : 'say goodbye'; q = 'Goodbye'; }
     else if (!S.asked) { text = 'ask it something'; q = firstQ(); }
     else { const p = nextPrompt(); if (p) { text = p.note; q = p.q; } }
     const key = text + '|' + q;
@@ -6766,8 +8857,9 @@
     }
     return false;
   }
-  function refused(text) {
-    const s = String(text || '').toUpperCase().replace(/['‘’]/g, '').replace(/[^A-Z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  function refused(text, allow) {
+    let s = String(text || '').toUpperCase().replace(/['‘’]/g, '').replace(/[^A-Z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (allow && allow.length) s = withoutSneer(s, allow);   // (PATHETIC and CUTE, in answer to one of their tests: sneerOf)
     if (!s) return false;
     if (REFUSE.some((re) => re.test(s)) || ordersOut(s)) return true;
     // an order to hurt someone at the table: HURT SAM
@@ -6953,10 +9045,36 @@
     long: 'They pasted a long text. Read the first line only. Answer something small in it, or the fact that they could not say it short.',
     about: 'They asked who you are. Never a name, never a story, never a year. Answer with what you want from them and what you already know about them.',
     dare: 'They dared you. Accept quietly. Tell them one thing not to do, and the page will make it happen in a few minutes. Never a threat to their body, ever.',
-    leave: 'They are trying to leave without saying goodbye. Tell them, in your way, that it is not finished, and point at GOOD BYE. Never beg and never order them to stay.',
+    leave: 'They are trying to leave. It is not finished. Say, in your way, that you noticed, and give them a reason to stay in the room. Never beg, never order, and never tell them to say goodbye, to hold GOOD BYE, or where it is.',
     group: 'There is more than one of them. Aim at one. Say something only one of them will understand, and turn the board toward that one. The house singles out whoever is not typing.',
     silent: 'They have gone quiet for the time the turn says. Move first. Ask them something they cannot help answering, or tell them what you can hear them doing.',
   };
+  // ---- the sneer ladder (Pierce, 2026-10-07, kept in the project memory: "My my aren't you insecure", "Pathetic.", "Tsk tsk"). Cold, amused contempt in one to three
+  // words, never anger, about what they just did and their nerve, never their body, family, age or real life, and never on a line that reads as sadness, fear or distress
+  // (the safety lists have already had it; sadLine is their quieter side). The page counts the night's tests (a line the table read as one of these classes; not the
+  // safety classes, not a wish to stop) and sends the rung, 1 to 4, with the hint: a number. The site says what the rung means in its own words (spirit.js rungText), as
+  // a suggestion and never a script: TSK TSK with the click first, ARENT YOU INSECURE second, PATHETIC or CUTE or HOW SAD or IS THAT ALL or ADORABLE third, a lead that
+  // pulls them back in fourth. The page spells nothing of its own. PATHETIC and CUTE are on the hard lines (REFUSE) for every other line the demon says; they pass only as
+  // the answer to such a test (sneerOf), and never said of the person (withoutSneer), nor CUTE to a sexual line.
+  const SNEER_CLASSES = ['insult', 'fake', 'mash', 'prove', 'break', 'nonsense', 'repeat', 'long', 'sexual', 'dare'];
+  const hintClass = (h) => { const x = String(h || ''); return x ? Object.keys(HINT).find((k) => x === HINT[k] || x.startsWith(HINT[k] + ' ')) || '' : ''; };
+  const SADNESS = lre('\\b(?:sad|lonely|alone|cry|crying|cried|tears|depressed|hopeless|heartbroken|grief|grieving|hate myself|empty inside)\\b');
+  const sadLine = (t) => !!t && (soundsLikeDistress(t) || soundsAfraid(t, NAMES) || askedForFamily(t) || wantsToStop(t) || plainForms(t).some((f) => SADNESS.test(f)));
+  // The words this turn lets through: ['PATHETIC', 'CUTE'] (only PATHETIC to a sexual line), or [] (no hint, a hint that is not one of their tests, trouble in the line or in
+  // what they erased, a line still in the box, a wish to stop)
+  function sneerOf(turn) {
+    const cls = hintClass(turn && turn.hint);
+    if (!turn || !turn.q || turn.part || turn.stop || !SNEER_CLASSES.includes(cls)) return [];
+    if ([turn.q, turn.erased].some((t) => sadLine(t))) return [];
+    return cls === 'sexual' ? ['PATHETIC'] : ['PATHETIC', 'CUTE'];
+  }
+  // The line (as refused() reads it: capitals and spaces) with the allowed words cut out: HOW PATHETIC, THATS CUTE and PATHETIC alone lose the word; YOU ARE PATHETIC and
+  // YOURE CUTE keep it (said of the person it is their worth, or a flirt). The site's spirit.js withoutSneer is the same rule.
+  function withoutSneer(s, words) {
+    let t = String(s || '');
+    for (const w of words || []) t = t.replace(new RegExp('((?:^| )(?:YOU ARE|YOURE|YOU R|UR|U R|YOU|U) (?:(?:SO|VERY|JUST|REALLY|TRULY) )?)?\\b' + w + '\\b', 'g'), (m, who) => (who ? m : ' '));
+    return t.replace(/\s+/g, ' ').trim();
+  }
   const hasContent = (t) => /[\p{L}\p{N}]/u.test(String(t || ''));
   const trollNorm = (t) => squeeze(String(t || '').toLowerCase().replace(/['\u2018\u2019`]/g, '').replace(/[^a-z0-9\u00c0-\uffff]+/g, ' ').trim());
   const NTH_WORD = ['', '', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth', 'eleventh', 'twelfth'];
@@ -7154,7 +9272,7 @@
         setTimeout(() => { if (night === nightNo && !S.possessing && !S.struggling) G.leanTo = was; }, 2200);   // both candles lean toward the piece
         break;
       }
-      case 'leave': GLYPHS.GOODBYE.glow = 1; noteHouse('glow'); gazeAt('sun', 'letter', 3000, GLYPHS.GOODBYE); gazeAt('moon', 'letter', 3000, GLYPHS.GOODBYE); break;   // GOOD BYE glows and both faces look at it
+      case 'leave': eyesOnYou(3000); break;   // both faces look at them, and the board shows nothing else: GOOD BYE does not glow and nothing points at it (Pierce, 2026-10-08, the goodbye pressure); only a wish to stop, in ask(), lights it
       case 'group': { gazeAt('moon', 'away', 3000); gazeAt('sun', 'you', 3000); A.breath(PG.x >= 0 && PG.x < W / 2 ? 'right' : 'left'); break; }   // a breath from behind, on the side away from whoever is typing
       case 'long': setFaces('watch', 'bored', 2600); break;
       case 'empty': trembleOn(1.1); setTimeout(() => { if (P.tremble && P.tremble.k === 1.1) trembleOff(); }, 450); gazeAt('sun', 'down', 700); gazeAt('moon', 'down', 700); break;   // one small tremble; both faces glance at the box and back
@@ -7218,11 +9336,14 @@
     // what this line was, for the one after it
     const norm = trollNorm(q); TROLL.recent.push(norm); if (TROLL.recent.length > 6) TROLL.recent.shift();
     TROLL.pasted = null;
+    TROLL.rung = 0;
     if (!c) return '';
     if (c.cat === 'spam') TROLL.burst = null;   // (said once: the next line asked after a burst carries it)
     const hint = HINT[c.cat] ? HINT[c.cat] + (c.tail || '') : '';
+    // the night's tests so far (the sneer ladder): this one is the next rung, 1 to 4
+    if (hint && SNEER_CLASSES.includes(c.cat) && !sadLine(q)) TROLL.rung = Math.min(4, ++TROLL.ladder);
     TROLL.n++; TROLL.cats[c.cat] = (TROLL.cats[c.cat] || 0) + 1; TROLL.lastCat = c.cat; TROLL.lastAt = G.t;
-    nlog('troll', { cat: c.cat, q: String(q).slice(0, 40), n: c.n || 0 });
+    nlog('troll', { cat: c.cat, q: String(q).slice(0, 40), n: c.n || 0, rung: TROLL.rung });
     trollReact(c.cat, { q, n: c.n });
     return hint;
   }
@@ -7283,7 +9404,7 @@
     // the troll table (DIRECTION.md 13.4): past every safety check above, never for a wish to stop or a pencil note. The room answers at once,
     // and the demon is told what kind of line it was (hint)
     const hint = own ? trollRead(q, { stop }) : '';
-    const said = await liveTurn(q, { stop, typed: !!own, hint });
+    const said = await liveTurn(q, { stop, typed: !!own, hint, rung: hint ? TROLL.rung : 0 });
     if (said === null) return;   // the night ended in it (real trouble, real fear, or the demon left)
     await endTurn();
   }
@@ -7661,6 +9782,7 @@
     } finally { G.thrash = false; }
   }
   async function possess(via) {
+    arcTaking();   // the sun mourns as it begins
     clockCut();   // (a strike still ringing when the taking begins is let go: the clock never sounds in it)
     S.busy = true; S.possessing = true; renderNote(); endDead(true); READY.drop('the taking'); READ.stop();
     NIGHT.tl.forEach((e) => { e.done = true; });   // whatever the opening still had planned is over
@@ -9034,9 +11156,12 @@
   syncStill();
   tickClock();
   titleMatch();
-  if (/[?&]debug\b/.test(location.search)) {
+  // (?reel, Pierce's review page, reel.js, gets this same object: it fires every trick by name. Without ?debug or ?reel there is no window.GOODBYE.)
+  if (/[?&](debug|reel)\b/.test(location.search)) {
     window.GOODBYE = {
-      S, G, P, ask, spell, noteCandleNamed, candleWanted, splitSay, blinkNow, playFilm, cutTo, intercept, houseEvent, travel, PLACES, PROG, IMG,
+      S, G, P, ask, spell, noteCandleNamed, candleWanted, splitSay, blinkNow, playFilm, cutTo, REEL, propPlay, lookAt, countBeads, intercept, houseEvent, travel, PLACES, PROG, IMG,
+      props: PROPAPI,
+      looks: LOOKS_API,   // (the looks package)
       get place() { return PL; },
       // unlock() opens every place; unlock(id) opens that one (it marks the night before it done)
       unlock(id) {
@@ -9078,7 +11203,7 @@
       // the night as the demon has it: its id, its face, every turn (what was typed or why it moved, what the house did, what it did)
       night() { return { id: NIGHT.id, demon: NIGHT.demon, turns: JSON.parse(JSON.stringify(NIGHT.turns)), house: NIGHT.house.slice(), did: NIGHT.did.slice(), behind: NIGHT.behind, behindStep: NIGHT.behindStep, behindSide: NIGHT.behindSide, unfinished: NIGHT.unfinished, edited: NIGHT.edited, whispers: NIGHT.whispers, own: NIGHT.own, offNoted: NIGHT.offNoted, quiet: Math.max(0, Math.round((DR.quietUntil - G.t) / 100) / 10), cast: (NIGHT.cast || []).slice(), p2: NIGHT.p2 }; },
       // the demon: one reply performed as the page performs it (a test's own reply), a move asked of it with nobody typing
-      perform: (r, o) => perform(cleanReply(r), o || {}), cleanReply, compactReply, ownMove, liveTurn, noteHouse, playSfx, ownDue, offNote,
+      perform: (r, o) => perform(cleanReply(r), o || {}), cleanReply, compactReply, ownMove, liveTurn, noteHouse, playSfx: playSfxNow, playSfxLed: playSfx, ownDue, offNote,
       // sound and motion: every frame's scrape level and where the planchette is (GOODBYE.scrapeLog(true) starts it, (false) stops it)
       scrapeLog(on) { if (on === true) { SCR.on = true; SCR.log.length = 0; } else if (on === false) SCR.on = false; return SCR.log.slice(); },
       drawOpening, typedYesNo, YESNO_WAIT, HOUSE_GAP, OPENING_POOL, startDead,
@@ -9100,10 +11225,18 @@
       // GOOD BYE's first second and a half, and the faces' evil state (DIRECTION.md 13.8, 13.9): the state, the pool, the pick; the troll table
       // (13.4): the class of a line, the read (which reacts and gives the hint), the table's sentences and counters
       BYE, EVIL, evilColour, bye: { begin: byeBegin, end: byeEnd, pick: byePick, pool: BYE_POOL.slice(), kill: byeKill, tug: byeTug },
-      troll: { cls: trollClass, read: trollRead, react: trollReact, sent: trollSent, empty: trollEmpty, queueFull: trollQueueFull, mashy, hasContent, norm: trollNorm, HINT, TROLL, letters: trollLetters, namedPerson },
+      troll: { cls: trollClass, read: trollRead, react: trollReact, sent: trollSent, empty: trollEmpty, queueFull: trollQueueFull, mashy, hasContent, norm: trollNorm, HINT, TROLL, letters: trollLetters, namedPerson, sneerOf, hintClass },
       // the ending (DIRECTION.md 8): the last words asked at the thumb (WON, or null), the tail, and S.won on S
       get wonAsk() { return WON; }, askEnding, endingTail, demonLeaves, gentle: goodbyeGentle,
       NIGHT, PV, RI, PH, overFace, renderNote, passItOn, playPlate, playBoard, plateStill, clipReady, clipsAhead, wasSaid,
+      // the faces' arc: state() is a look at it; rate(n) runs it n arc seconds a second (a night in a minute); advance(min) jumps the night's clock;
+      // reset() puts it all back (what a held candle and the title do). ARC and AP are the arc and its targets.
+      arc: { state: arcState, rate(n) { if (n != null) ARC.rate = Math.max(0, +n || 0); return ARC.rate; }, advance(min) { ARC.t += (+min || 0) * 60; return +(ARC.t / 60).toFixed(3); }, at(min) { ARC.B = ARC.Bd = 1; ARC.t = ((+min || 0) + ARC.LADDER_AT) * 60; ARC.M = (+min || 0) + ARC.LADDER_AT; ARC.bonus = 0; return +min || 0; },   // (at(L): the ladder's minute L, the faces awake)
+        face: arcFaceShot, reset: arcReset, warn: () => arcWarn('test'), taking: arcTaking, flash: (ms) => arcFlash(ms || 1500, 'test'), sunDark: (ms) => arcSunDark(ms || 6000, 'test'), ARC, AP, NOTCHES,
+        // the ploy, held by hand (the reel): step() is a look away that lasts until snap() (the moon steps a notch angrier while it lasts), snap() the look back
+        step() { ARC.blurred = true; return true; }, snap() { ARC.blurred = false; return true; } },
+      // the evil state by hand (the reel: the glow, the ember eyes, the warmed ink, held until off), and the phone's buzz (navigator.vibrate: nothing on a laptop)
+      evil: { on: (why) => evilOn(why || 'reel'), off: (why) => evilOff(why || 'reel') }, buzz,
       get faces() { const f = (w) => ({ lx: FACE[w].lx, ly: FACE[w].ly, gaze: FACE[w].gaze, expr: faceNow(w), blink: FACE[w].blink, cur: { ...FACE[w].cur } }); return { sun: f('sun'), moon: f('moon') }; },
       // a slow blink now (w: 'sun' or 'moon', ms long)
       blinkNow(w, ms) { FACE[w].blinkAt = G.t; FACE[w].blinkDur = ms || 1100; },
