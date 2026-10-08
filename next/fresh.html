@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>GOODBYE</title>
+<style>
+  html, body { height: 100%; margin: 0; background: #0b0807; color: #d8cfc2; font: 17px/1.5 Georgia, 'Times New Roman', serif; }
+  main { min-height: 100%; display: grid; place-content: center; gap: 14px; padding: 24px; text-align: center; }
+  p { margin: 0; max-width: 34ch; }
+  small { color: #8c8175; }
+  a { color: #d8cfc2; }
+</style>
+</head>
+<body>
+<main>
+  <p id="msg">Clearing what this browser remembers about GOODBYE.</p>
+  <small id="sub"></small>
+</main>
+<script>
+// Starts GOODBYE from scratch in this browser, the way a stranger would find it: every key the game keeps (goodbye.*) is removed,
+// and so is anything kept for this tab. The root game and /next/ share one origin, so this clears both. Then it opens /next/.
+(function () {
+  var msg = document.getElementById('msg'), sub = document.getElementById('sub'), n = 0;
+  try {
+    var keys = [];
+    for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf('goodbye.') === 0) keys.push(k); }
+    keys.forEach(function (k) { localStorage.removeItem(k); n++; });
+    try { sessionStorage.clear(); } catch (e) { /* none kept */ }
+  } catch (e) {
+    msg.textContent = 'This browser will not let the page clear its memory.';
+    sub.innerHTML = 'Open <a href="./">the game</a> in a private window instead (Cmd+Shift+N), which starts empty.';
+    return;
+  }
+  msg.textContent = n ? 'Cleared ' + n + ' thing' + (n === 1 ? '' : 's') + ' it remembered. Starting from scratch.' : 'It remembered nothing. Starting from scratch.';
+  sub.textContent = 'Going to the table.';
+  setTimeout(function () { location.replace('./'); }, 1400);
+})();
+</script>
+</body>
+</html>
