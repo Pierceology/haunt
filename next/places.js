@@ -16,7 +16,7 @@
       // the walk up the drive (Flow, image to video, first frame = the still; played once, never looped, encoded without sound: the walk's own
       // sound is the game's, audio.js A.gravel / A.screenDoor / the crickets): files in assets/clips/farmhouse/. A file that is not there, or
       // is slow, gives the push-in still without a word.
-      exteriorClip: { land: 'exterior-land.mp4', port: 'exterior-port.mp4' }, thumb: 'assets/places/thumb-farmhouse.jpg?v=8f93fe68ae', plate: 'assets/places/farmhouse-plate.jpg?v=b4a169c408', plateHi: 'assets/places/farmhouse-plate-2x.jpg?v=c499b4accc', board: 'assets/places/farmhouse-board.jpg?v=efcffa0b28' },
+      exteriorClip: { land: 'exterior-land.mp4', port: 'exterior-port.mp4' }, thumb: 'assets/places/thumb-farmhouse.jpg?v=8f93fe68ae', plate: 'assets/places/farmhouse-plate.jpg?v=0b7898fa24', plateHi: 'assets/places/farmhouse-plate-2x.jpg?v=e179255f18', board: 'assets/places/farmhouse-board.jpg?v=efcffa0b28' },
     candles: [{ x: 131, y: 76 }, { x: 1368, y: 146 }],
     // the live flames: wick (x, y), lean of the photographed flame (tilt, radians from up), length, and the spot
     // darkened on the wick. The photographed flames are painted out of the plate files, so hide only chars the wick.
