@@ -664,7 +664,8 @@
   // below). S.queued is the next one in line, as it was when there was only one; setting it to nothing empties the line.
   S.queue = [];
   Object.defineProperty(S, 'queued', { get: () => S.queue[0] || null, set: (v) => { if (v == null) clearQueue(); } });
-  // Who is at the table tonight. Nobody is asked (there is no names card), and nothing is kept for next time. A name exists only if it
+  // Who is at the table tonight. Nobody is asked (there is no names card). A name given in their own words is kept on this device for the
+  // next night (2026-10-08); nothing else is. A name exists only if it
   // came with a Pass it on link (the first name its sender typed), or somebody gave it in their own words (volunteeredName), or it
   // answered WHO SAID THAT. It is empty at every match. It is used twice a night at most (NAMEUSE): spelled once, by itself, and
   // said once, low, in the dark at the very end. No line carries a name; the lines say YOU.
@@ -675,8 +676,9 @@
     return list.map((n) => n.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 10)).filter((n) => n && n !== 'AND').slice(0, 6);
   }
   const nice = (n) => n ? n[0] + n.slice(1).toLowerCase() : '';
-  // names and the one it took, kept on the phone by an older version, are cleared on load: nothing about anyone is kept
-  store.set('names', []); store.set('chosen', '');
+  // A name somebody gave in their own words is kept on this device for the next night, so it is not asked twice (Pierce, 2026-10-08:
+  // "forgot my name"). Nothing else about anyone is kept; the one it took is still kept as nothing.
+  NAMES = cleanNames(store.get('names', [])); store.set('chosen', '');
   // The one it takes no longer has a name. (Kept as nothing, so what read it keeps working.)
   const aName = () => '';
   const keptChosen = () => '';
@@ -694,6 +696,7 @@
   function takeName(n, how) {
     if (!n || NAMES.includes(n) || NAMES.length >= 6) return false;
     NAMES.push(n); NAMEUSE.typedAt[n] = G.t; NAMEUSE.log.push({ n, how, at: Math.round(G.t) });
+    store.set('names', NAMES);   // kept for the next night on this device
     return true;
   }
   // ---------------------------------------------------------------- the shake (DIRECTION.md 13.7)
@@ -1740,7 +1743,10 @@
     P.ang = lerp(P.ang, targetAng, 0.08);
     // the scrape is the wood moving on the board, and only while the board is on the table in front of them
     // (silent while it reads along over their shoulder: P.silent)
-    const heard = S.started && G.intro < 0.98 && !P.silent ? P.speed * BOARD.s : 0;
+    // (and not the slow drift back to the middle or the pondering while a move is out: those went on scraping long after the letter was
+    // marked (Pierce, 2026-10-08); a real slide in those modes, faster than 80, is still heard)
+    const slowThink = (P.mode === 'seek' || P.mode === 'ponder') && P.speed <= 80;
+    const heard = S.started && G.intro < 0.98 && !P.silent && !slowThink ? P.speed * BOARD.s : 0;
     A.scrape(heard, P.heavy || 0);
     if (SCR.on) { SCR.log.push({ t: Math.round(G.t), v: +(A.ready ? A.scrapeLevel : 0).toFixed(3), x: Math.round(P.x), y: Math.round(P.y), sx: +P.sx.toFixed(1), sy: +P.sy.toFixed(1) }); if (SCR.log.length > 9000) SCR.log.splice(0, 3000); }
   }
