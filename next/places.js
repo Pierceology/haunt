@@ -107,15 +107,17 @@
   // edge of the wide take) and relightGhost (an old hand from the top) are not listed. The engine does those moments
   // itself: the match in the dark for the opening, the candles relighting on their own, the ghost's match from the far
   // side. The files stay in the folder; nothing loads them.
+  // The old table's films are not named any more (Pierce saw it "cuts to black"): idle, gust and blowoutL (idle-*, gust-*, blowout-l-*) and the
+  // dark and half stills (keys/) were all made from the first plate (corn, glasses, another table). They played only when the flame film failed to
+  // load, and then a candle going out jumped the table to that old photo, or to black. With them gone a candle event on a failed film is the
+  // engine's own: the flames drawn (fire, below, K-LIT's own flames on black: the new plate's candles are the old plate's, untouched), blown and
+  // relit by the engine (game.js blowout and blackout: plateStill, then blowCandle). The files stay in assets/clips/farmhouse/; a clip comes back
+  // here only when it is shot from the current plate.
   FARMHOUSE.clips = {
     land: {
-      idle: 'idle-land.mp4', gust: 'gust-land.mp4', blowoutL: 'blowout-l-land.mp4',
-      keys: { dark: 'keys/dark-land.jpg', half: 'keys/half-land.jpg' },
       fire: 'frames/fire-16x9.png',
     },
     port: {
-      idle: 'idle-port.mp4', gust: 'gust-port.mp4', blowoutL: 'blowout-l-port.mp4',
-      keys: { dark: 'keys/dark-port.jpg', half: 'keys/half-port.jpg' },
       fire: 'frames/fire-9x16.png',
     },
     // The possession's smoke: two threads off the wicks (Pierce, 2026-10-04: the full-frame pour "came in too much and clearly not feeling like

@@ -1,0 +1,32 @@
+{
+  "chime": [
+    "chime-close-1.mp3",
+    "chime-close-2.mp3"
+  ],
+  "organ": [
+    "organ-key-1.mp3",
+    "organ-key-2.mp3",
+    "organ-wheeze-1.mp3",
+    "organ-wheeze-2.mp3"
+  ],
+  "sheet": [
+    "sheet-slip-1.mp3",
+    "sheet-slip-2.mp3"
+  ],
+  "frame": [
+    "frame-shift-1.mp3",
+    "frame-shift-2.mp3"
+  ],
+  "stove": [
+    "stove-tick-1.mp3",
+    "stove-tick-2.mp3"
+  ],
+  "door": [
+    "front-door-knock-1.mp3",
+    "front-door-knock-2.mp3"
+  ],
+  "rattle": [
+    "front-door-rattle-1.mp3",
+    "front-door-rattle-2.mp3"
+  ]
+}

@@ -676,10 +676,10 @@
   // below). S.queued is the next one in line, as it was when there was only one; setting it to nothing empties the line.
   S.queue = [];
   Object.defineProperty(S, 'queued', { get: () => S.queue[0] || null, set: (v) => { if (v == null) clearQueue(); } });
-  // Who is at the table tonight. Nobody is asked (there is no names card). A name given in their own words is kept on this device for the
-  // next night (2026-10-08); nothing else is. A name exists only if it
-  // came with a Pass it on link (the first name its sender typed), or somebody gave it in their own words (volunteeredName), or it
-  // answered WHO SAID THAT. It is empty at every match. It is used twice a night at most (NAMEUSE): spelled once, by itself, and
+  // Who is at the table tonight. Nobody is asked (there is no names card). A name given in their own words (volunteeredName) is kept on this
+  // device and is at the table at every match after it (2026-10-08, Pierce: it had forgotten his name); nothing else about anyone is kept. The
+  // table starts with those names and nobody else (a night that comes from a Pass it on link has that link's name alone: the first name its
+  // sender typed, for that night only). It is used twice a night at most (NAMEUSE): spelled once, by itself, and
   // said once, low, in the dark at the very end. No line carries a name; the lines say YOU.
   let NAMES = [];
   function cleanNames(v) {
@@ -690,7 +690,8 @@
   const nice = (n) => n ? n[0] + n.slice(1).toLowerCase() : '';
   // A name somebody gave in their own words is kept on this device for the next night, so it is not asked twice (Pierce, 2026-10-08:
   // "forgot my name"). Nothing else about anyone is kept; the one it took is still kept as nothing.
-  NAMES = cleanNames(store.get('names', [])); store.set('chosen', '');
+  const storedNames = () => { const v = store.get('names', []); return cleanNames(Array.isArray(v) ? v : []); };   // (a value that is not a list is nobody)
+  NAMES = storedNames(); store.set('chosen', '');
   // The one it takes no longer has a name. (Kept as nothing, so what read it keeps working.)
   const aName = () => '';
   const keptChosen = () => '';
@@ -708,9 +709,12 @@
   function takeName(n, how) {
     if (!n || NAMES.includes(n) || NAMES.length >= 6) return false;
     NAMES.push(n); NAMEUSE.typedAt[n] = G.t; NAMEUSE.log.push({ n, how, at: Math.round(G.t) });
-    store.set('names', NAMES);   // kept for the next night on this device
+    store.set('names', cleanNames(storedNames().concat(n)));   // kept on this device for the next night (only the names they gave: a name that came with a link is not)
     return true;
   }
+  // The table at a match: the names this device was given in an earlier night (they came with the person, not with the night), as if typed long ago.
+  // newNight and the Sit down both start from it (a shared link's night then has its own name instead: the match).
+  function seatNames() { NAMES = storedNames(); NAMEUSE.reset(); NAMES.forEach((n) => { NAMEUSE.typedAt[n] = -Infinity; }); }
   // ---------------------------------------------------------------- the shake (DIRECTION.md 13.7)
   // Pierce, 2026-10-08: "Bangings don't quite do it enough for me ... what if you did a bang and it shook the camera just a little bit?" A bang
   // on its own is a sound effect; a bang that moves the picture is something hitting the table. Every placed sound of weight moves the camera
@@ -6971,7 +6975,7 @@
     // the night that just ended, for a test's look (what was done with its name)
     if (NAMEUSE.spelled || NAMEUSE.voiced || NAMES.length) NAMEUSE.last = { spelled: NAMEUSE.spelled, voiced: NAMEUSE.voiced, names: NAMES.slice(), lines: NIGHT.spelledLines.filter((l) => sayHasName(l)).length, log: NAMEUSE.log.slice() };
     NIGHT.spelledLines = [];
-    NAMES = []; NAMEUSE.reset();   // nobody is at the table until somebody says so
+    seatNames();   // the names this device was given, and nobody else until somebody says so
     NIGHT.id = 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
     Object.assign(NIGHT, { demon: '', turns: [], house: [], did: [], own: 0, lastOwn: -Infinity, ownAfter: rnd(13000, 17000), offNoted: false, fails: 0, dead: false, again: false, voiced: 0, voiceSet: {} });
     // the one behind them starts across the room, on one side of them for the whole night; nothing unfinished, edited or whispered yet
@@ -8997,19 +9001,51 @@
     for (const i of [1, 0]) { const c = candleSpot(i); if (c && Math.hypot(px - c.x, py - c.y) <= c.r) return i; }
     return -1;
   }
+  // The hold shows that it is registering (the cue sheet, 2026-10-08: for the whole second nothing on the table moved, so a held candle could not tell it was working): a warm dark
+  // settles over the held flame, from nothing at the touch to nearly full at the second, as if the flame were being smothered, and lifts in a fifth of a second when the hand lets go.
+  // An overlay on the table, drawn by the browser over the canvas: his films and the candle's own flame are not touched, and the hold is what it was (one second, a tap does nothing,
+  // it ends the night). Whatever goes wrong here never reaches the hold: it is only ever called inside a try.
+  const HOLD_DIM = { el: null };
+  function holdFlame(i) {   // where the held candle's flame is on screen: up the candle from its wick, the way it leans
+    const f0 = FLAMES && FLAMES[i];
+    if (f0) {
+      const b = plateMap(f0), p = worldToScreenStill(b.x, b.y), len = f0.len * plateScale() * CAM.s;
+      return { x: p.x + Math.sin(f0.tilt) * len * 0.4, y: p.y - Math.cos(f0.tilt) * len * 0.4, r: Math.max(34, len * 0.8) };
+    }
+    const c = candleScreen(i);
+    return { x: c.x * W, y: c.y * H - 20, r: 40 };
+  }
+  function holdDim(i, on) {
+    let el = HOLD_DIM.el;
+    if (!on) { if (el) { el.style.transition = 'opacity 200ms ease-out'; el.style.opacity = '0'; } return; }
+    const c = holdFlame(i);
+    if (!el) {
+      el = HOLD_DIM.el = document.createElement('div');
+      el.setAttribute('aria-hidden', 'true');
+      el.style.cssText = 'position:fixed;z-index:9;pointer-events:none;border-radius:50%;opacity:0;mix-blend-mode:multiply;background:radial-gradient(circle closest-side,rgb(58,30,16) 0%,rgb(110,68,40) 40%,rgba(255,255,255,0) 100%)';
+      document.body.appendChild(el);
+    }
+    el.style.left = (c.x - c.r) + 'px'; el.style.top = (c.y - c.r) + 'px'; el.style.width = (c.r * 2) + 'px'; el.style.height = (c.r * 2) + 'px';
+    el.style.transition = 'none'; el.style.opacity = '0'; void el.offsetWidth;
+    el.style.transition = 'opacity 1000ms linear'; el.style.opacity = '1';
+  }
+  const holdShow = (i, on) => { try { holdDim(i, on); } catch (e) { /* the overlay is never the hold */ } };
   addEventListener('pointerdown', (e) => {
     if (!S.started || S.stopping || pewOpen || HOLD.id != null) return;
     if (e.target && e.target.closest && e.target.closest('#dock, #share, #intro, #establish, #toast')) return;
-    if (candleUnder(e.clientX, e.clientY) < 0) return;
+    const held = candleUnder(e.clientX, e.clientY);
+    if (held < 0) return;
     HOLD.id = e.pointerId; HOLD.x = e.clientX; HOLD.y = e.clientY;
     HOLD.timer = setTimeout(() => {
       HOLD.id = null;
       const eat = (ev) => { ev.preventDefault(); ev.stopPropagation(); };
       addEventListener('click', eat, { capture: true, once: true }); setTimeout(() => removeEventListener('click', eat, true), 1500);
+      holdShow(held, false);
       endNow();
     }, 1000);
+    holdShow(held, true);
   }, true);
-  const letGo = (e) => { if (e.pointerId !== HOLD.id) return; clearTimeout(HOLD.timer); HOLD.id = null; };
+  const letGo = (e) => { if (e.pointerId !== HOLD.id) return; clearTimeout(HOLD.timer); HOLD.id = null; holdShow(0, false); };
   addEventListener('pointerup', letGo, true);
   addEventListener('pointercancel', letGo, true);
   addEventListener('pointermove', (e) => { if (e.pointerId === HOLD.id && Math.hypot(e.clientX - HOLD.x, e.clientY - HOLD.y) > 40) letGo(e); }, true);
@@ -9068,12 +9104,15 @@
     if ([turn.q, turn.erased].some((t) => sadLine(t))) return [];
     return cls === 'sexual' ? ['PATHETIC'] : ['PATHETIC', 'CUTE'];
   }
-  // The line (as refused() reads it: capitals and spaces) with the allowed words cut out: HOW PATHETIC, THATS CUTE and PATHETIC alone lose the word; YOU ARE PATHETIC and
-  // YOURE CUTE keep it (said of the person it is their worth, or a flirt). The site's spirit.js withoutSneer is the same rule.
+  // The line (as refused() reads it: capitals and spaces) with the allowed word cut out, but only when the WHOLE line is a short sneer frame: an optional lead (HOW, SO, OH, AWW,
+  // THATS, THAT WAS, THAT IS, ITS, TSK, an intensifier), then PATHETIC or CUTE, then at most THAT, NOW, REALLY or THOUGH. HOW PATHETIC, THATS CUTE and PATHETIC alone lose the word. Any
+  // other line keeps it and refused() reads it whole: YOU ARE PATHETIC, YOUR MOTHER IS PATHETIC, YOUR PATHETIC LIFE, PATHETIC OLD MAN, WHAT A PATHETIC CHILD, YOU LOOK PATHETIC and YOUR DAD
+  // IS CUTE stay dropped (the sneer is about the act and their nerve, never the person). The site's spirit.js withoutSneer is the same rule.
+  const SNEER_LEAD = '(?:(?:HOW|SO|OH|AWW*|THATS|THAT WAS|THAT IS|ITS|IT IS|TSK|VERY|JUST|REALLY|TRULY) )*';
   function withoutSneer(s, words) {
-    let t = String(s || '');
-    for (const w of words || []) t = t.replace(new RegExp('((?:^| )(?:YOU ARE|YOURE|YOU R|UR|U R|YOU|U) (?:(?:SO|VERY|JUST|REALLY|TRULY) )?)?\\b' + w + '\\b', 'g'), (m, who) => (who ? m : ' '));
-    return t.replace(/\s+/g, ' ').trim();
+    const t = String(s || '').replace(/\s+/g, ' ').trim(), ws = (words || []).map(String).filter((w) => /^[A-Z]+$/.test(w));
+    if (!ws.length || !new RegExp('^' + SNEER_LEAD + '(?:' + ws.join('|') + ')(?: (?:THAT|NOW|REALLY|THOUGH))?$').test(t)) return t;
+    return t.replace(new RegExp('\\b(?:' + ws.join('|') + ')\\b'), ' ').replace(/\s+/g, ' ').trim();
   }
   const hasContent = (t) => /[\p{L}\p{N}]/u.test(String(t || ''));
   const trollNorm = (t) => squeeze(String(t || '').toLowerCase().replace(/['\u2018\u2019`]/g, '').replace(/[^a-z0-9\u00c0-\uffff]+/g, ' ').trim());
@@ -10727,9 +10766,9 @@
     const struck = strikeMatch();   // the match on the title is struck, here, now; the night is set up under it
     try {
       if (S.invitePending) await Promise.race([S.invitePending, wait(3000)]);
-      // nobody is asked who is at the table: no card. Empty, every night. Only a shared link brings a name (the first name its
-      // sender typed; what the sender wrote stays on the site), and the board spells it before anyone types.
-      NAMES = []; NAMEUSE.reset();
+      // nobody is asked who is at the table: no card. The names this device was given in their own words are there (an earlier night's). A shared
+      // link brings its own instead (the first name its sender typed; what the sender wrote stays on the site), and the board spells it before anyone types.
+      seatNames();
       if (S.invite) {
         NAMES = S.inviteName ? cleanNames([S.inviteName]) : [];
         if (NAMES[0]) NAMEUSE.typedAt[NAMES[0]] = -Infinity;
