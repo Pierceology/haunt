@@ -10094,8 +10094,9 @@
   // The fight for GOOD BYE opens late (Pierce, 2026-10-10: "the whole hold goodbye isn't a great idea until closer to the end"): once the house
   // is in AND the night is past its twelfth minute. Before that a hold slides the piece off and nothing ends; the pencil never says "say
   // goodbye" and the sun never glances at the exit. The candle is the way out at every moment.
-  const BYE_OPENS_S = 12 * 60;
+  let BYE_OPENS_S = 12 * 60;
   function byeOpen() { return S.haunted && nightSecs() >= BYE_OPENS_S; }
+  function byeOpensAt(secs) { if (secs != null) BYE_OPENS_S = Math.max(0, +secs || 0); return BYE_OPENS_S; }   // (?debug and the reel: open the fight sooner than minute twelve)
   // The ending's line: the move asked for at the thumb (WON, why 'won' or 'bye'), performed the instant it is in; asked now if it never was.
   // Within eight seconds of this moment, or not at all (wonNoLine): the page never invents words. Returns what was said ('' for nothing),
   // or null when the night ended inside it. held: what perform held back for the tail (the voice, the record, the sound it played).
@@ -11208,7 +11209,7 @@
   // (?reel, Pierce's review page, reel.js, gets this same object: it fires every trick by name. Without ?debug or ?reel there is no window.GOODBYE.)
   if (/[?&](debug|reel)\b/.test(location.search)) {
     window.GOODBYE = {
-      S, G, P, ask, spell, noteCandleNamed, candleWanted, splitSay, blinkNow, playFilm, cutTo, REEL, propPlay, lookAt, countBeads, intercept, houseEvent, travel, PLACES, PROG, IMG,
+      S, G, P, ask, spell, noteCandleNamed, candleWanted, splitSay, blinkNow, playFilm, cutTo, REEL, propPlay, lookAt, countBeads, byeOpen, byeOpensAt, nightSecs, renderNote, intercept, houseEvent, travel, PLACES, PROG, IMG,
       props: PROPAPI,
       looks: LOOKS_API,   // (the looks package)
       get place() { return PL; },

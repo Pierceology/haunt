@@ -194,7 +194,7 @@
     // ---------------------------------------------------------------- the taking and the ending (7, 8, 13.9)
     add('ending:taking', { group: 'ending', label: 'The taking', what: 'the sun mourns, smoke, the thrum, the countdown embers, the board slides, NO to YES; about thirty seconds. After it the house is haunted', status: 'live', sub: 'The taking', fire: () => GB.possess('reel') });
     add('ending:bye-first', { group: 'ending', label: 'GOOD BYE: the first second and a half', what: 'both faces evil at once, the piece tugs toward NO, the picture jumps, a line from the pool lit under the board; let go after three seconds', status: 'live', sub: 'GOOD BYE',
-      async fire() { GB.S.sitAt -= 13 * 60 * 1000; GB.bye.begin('reel'); await sleep(3000); GB.bye.end('reel'); return true; } });
+      async fire() { GB.byeOpensAt(0); GB.bye.begin('reel'); await sleep(3000); GB.bye.end('reel'); return true; } });
     add('ending:fight', { group: 'ending', label: 'The fight for GOOD BYE', what: 'it drags against you toward NO and off the board. Hold the piece on GOOD BYE with the mouse for four seconds to win; let go and it slams to NO, NO struck through', status: 'live', sub: 'GOOD BYE', fire: () => GB.struggle() });
     add('ending:fight-second', { group: 'ending', label: 'The second try', what: 'the second fight always wins: it barely pulls, a second and a half is enough, and nobody holding it, it goes to GOOD BYE by itself in twelve seconds. Then the won ending, to the title', status: 'live', sub: 'GOOD BYE',
       fire() { GB.S.goodbyeTries = Math.max(1, GB.S.goodbyeTries || 0); return GB.struggle(); } });
@@ -426,7 +426,7 @@ html.reel-side body{position:fixed!important;top:0!important;left:0!important;bo
     ctlRow('The dread', [0, 2, 4, 6, 8, 10].map((d) => [String(d), () => { GB.setDread(d); return 'dread ' + d; }]));
     ctlRow('The night', [
       ['The taking', () => { GB.possess('reel'); return 'the taking: about thirty seconds'; }, 'NO to YES, the smoke, the silence, the thrum'],
-      ['Hold GOOD BYE', async () => { GB.S.sitAt -= 13 * 60 * 1000; GB.bye.begin('reel'); await sleep(3000); GB.bye.end('reel'); return 'held three seconds, let go (the night aged past minute twelve first: the fight is closed before that)'; }, 'after the taking: the evil faces, the tug, a line; before the taking the piece just slides off'],
+      ['Hold GOOD BYE', async () => { GB.byeOpensAt(0); GB.bye.begin('reel'); await sleep(3000); GB.bye.end('reel'); return 'held three seconds, let go (the fight opened for this: in a night it waits for minute twelve)'; }, 'after the taking: the evil faces, the tug, a line; before the taking the piece just slides off'],
       ['Left candle out', () => { GB.blowCandle(0, { dur: 700, dir: -1 }); return 'the left candle out (the sun\'s side)'; }],
       ['Right candle out', () => { GB.blowCandle(1, { dur: 700, dir: 1 }); return 'the right candle out (the moon\'s side)'; }],
       ['Relight', () => { GB.relightCandle(0); GB.relightCandle(1); GB.G.blackT = 0; return 'both lit'; }],
