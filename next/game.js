@@ -8284,7 +8284,7 @@
     knock: { d: 1, cd: 12, w: 2, small: true },
     steps: { d: 1, cd: 90, w: 1.2, small: true },
     blowout: { d: 2, cd: 40, w: 1, small: true, ok: () => !G.candleOutT[0] && !G.candleOutT[1] },
-    shadow: { d: 3, cd: 30, w: 1.2, small: true },
+    shadow: { d: 99, cd: 30, w: 1.2, small: true },   // (off: Pierce, 2026-10-10, "shadow crossing is so fake")
     turn: { d: 4, cd: 70, w: 1.6, big: true, ok: () => !composing() },
     mimic: { d: 3, cd: 60, w: 1.1 },
     count: { d: 3, cd: 80, w: 1.3, big: true, ok: () => !composing() },
@@ -8619,7 +8619,7 @@
       { const sd = pick(['left', 'right']); await arcLeadWait(sd); if (halt) return; A.breath(sd); famGust(sd === 'left' ? 1 : -1); }
       await wait(500);
       A.knock(1, 0, 1.2);
-      G.shadow = { t0: G.t, dur: 1700, dir: pick([-1, 1]) }; A.pass();
+      A.pass();   // (the dark band across the screen is out: Pierce, 2026-10-10, "shadow crossing is so fake"; the pass is heard, not seen)
       noteHouse('turn');
       await wait(1200);
     },
