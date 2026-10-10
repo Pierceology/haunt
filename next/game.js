@@ -6117,8 +6117,18 @@
   const LORE = /\b(satan|lucifer|beelzebub|bael|baal|zozo|mimi|crapoulet|legion|mammon|astaroth|asmodeus|belial|abaddon|pazuzu|moloch|lilith|leviathan|azazel|mephisto\w*|belphegor|valak|paimon|antichrist|splitfoot)\b/i;
   // The say broken into the board's lines: words packed in order into lines of at most SAY_MAX, never a word cut. null when a word
   // is longer than a line or a fourth line would be needed. [] for nothing.
+  // The site marks the end of one of the demon's sentences with " / " (2026-10-10, Pierce: "put the dots back if you use them right"): a piece
+  // that begins after a mark gets the dot; a line broken only because it ran long gets a plain space. Lines are still at most SAY_MAX letters.
+  function splitSayPieces(s) {
+    const out = [];
+    String(s || '').split('/').map((seg) => seg.trim()).filter(Boolean).forEach((seg, i) => {
+      const lines = splitSay(seg) || [seg.slice(0, SAY_MAX)];
+      lines.forEach((text, j) => out.push({ text, dot: i > 0 && j === 0 }));
+    });
+    return out;
+  }
   function splitSay(s) {
-    const words = String(s || '').split(' ').filter(Boolean);
+    const words = String(s || '').replace(/\//g, ' ').split(' ').filter(Boolean);
     if (!words.length) return [];
     const lines = [];
     let line = '';
@@ -6659,12 +6669,12 @@
           if (!say || spelled) continue;
           spelled = true; await piece();
           // up to three lines of eighteen, each at the old weight, a breath between them (the transcript line is the whole say)
-          const says = splitSay(say) || [];
+          const says = splitSayPieces(say);
           for (let k = 0; k < says.length; k++) {
-            if (k) { await wait(rnd(500, 800)); live(); if (cutNow()) break; addLetter(SEP); }
+            if (k) { await wait(rnd(500, 800)); live(); if (cutNow()) break; addLetter(says[k].dot ? SEP : ' '); }   // (the dot only at the end of one of its sentences)
             // (o.char: the last line of the night chars the board as it lands)
             arcFlinchAt(0, 0.55);   // a line begins to land: the shy moon flinches
-            await spell(says[k], { hostile: violent, dw: K.dw, nameUse: true, fit: say.length, char: !!o.char && k === says.length - 1 });
+            await spell(says[k].text, { hostile: violent, dw: K.dw, nameUse: true, fit: say.length, char: !!o.char && k === says.length - 1 });
           }
           line.push(say); done.say = say; MEM.line(say);
           { let j = i + 1; while (moves[j] && moves[j].to === 'sound') j++; glue = !!moves[j] && moves[j].to === 'letter'; }
@@ -7412,7 +7422,7 @@
     const run = LK.run;
     if (run) { run.stopped = why; nlog('look', { look: run.name, stopped: why }); }
     for (const w of LK.watch.slice()) w.res();
-    LK.on = false; LK.run = null; LK.vid = LK.base = LK.dis = LK.over = LK.zoom = LK.fade = LK.slide = LK.pre = null; LK.phase = '';
+    LK.on = false; document.body.classList.remove('looking'); LK.run = null; LK.vid = LK.base = LK.dis = LK.over = LK.zoom = LK.fade = LK.slide = LK.pre = null; LK.phase = '';
     LK.keep.clear(); LK.next = null; lkHideLine(false);
     for (const [k, v] of PV.vids) if (k.startsWith('look:')) { try { v.el.pause(); } catch (e) { /* fine */ } }
     lkSounds(true);
@@ -7540,7 +7550,7 @@
     LK.seen.add(name);
     // IN
     let t = performance.now();
-    LK.on = true; LK.phase = 'in'; LK.vid = vin; LK.base = null; LK.dis = null; LK.over = null; LK.zoom = null; LK.slide = R.dir;
+    LK.on = true; document.body.classList.add('looking'); LK.phase = 'in'; LK.vid = vin; LK.base = null; LK.dis = null; LK.over = null; LK.zoom = null; LK.slide = R.dir;
     LK.fade = { kind: 'in', el: vin, from: L.in.from, ms: LK_FADE };
     run.media = { in: [], out: [], cut: [] };
     // the still, when it is ready before the turn ends, comes up over the turn's last join seconds (Flow's last frame sits a few px off it)
@@ -7589,7 +7599,7 @@
     const live = lkAlive(run);
     if (run.o.spell) lkHideLine(false);
     if (LK.run === run) {
-      LK.on = false; LK.run = null; LK.vid = LK.base = LK.dis = LK.over = LK.zoom = LK.fade = LK.slide = null; LK.phase = '';
+      LK.on = false; document.body.classList.remove('looking'); LK.run = null; LK.vid = LK.base = LK.dis = LK.over = LK.zoom = LK.fade = LK.slide = null; LK.phase = '';
       LK.keep.clear();
     }
     if (!LK.run) for (const [k, v] of [...PV.vids]) if (k.startsWith('look:')) dropClip(k, v);   // their decoders go back to the night
@@ -7994,7 +8004,7 @@
     nlog('look', { look: name, have: true, cut: true, uncalled: !!o.uncalled });
     LK.seen.add(name);
     let t = performance.now();
-    LK.on = true; LK.phase = 'cut'; LK.vid = v0; LK.base = null; LK.slide = null; LK.fade = null; LK.over = null;
+    LK.on = true; document.body.classList.add('looking'); LK.phase = 'cut'; LK.vid = v0; LK.base = null; LK.slide = null; LK.fade = null; LK.over = null;
     const bed = (C.snd || []).map(([k, s, v]) => setTimeout(() => {
       if (!lkAlive(run)) return;
       if (k === 'drip') A.drip && A.drip(C.at, v);
@@ -8752,7 +8762,7 @@
   const OFF_NOTE = "it isn't answering tonight";
   // After the first try at saying goodbye is lost (they let go; NO is struck through), the pencil under the board says how it is done, in the room, so nobody
   // is punished for a trick nobody told them (Pierce, 2026-10-08). The second try always wins; tapping the line still asks for it.
-  const BYE_LOST_NOTE = 'hold it until it stops fighting';
+  const BYE_LOST_NOTE = 'it will not let you';   // (2026-10-10: no hold ever wins; the night ends on its own, by the candle, or by asking to stop)
   function offNote() {
     if (NIGHT.offNoted) return;
     NIGHT.offNoted = true; S.offNote = OFF_NOTE; nlog('offNote'); renderNote();
@@ -9932,6 +9942,9 @@
     P.mode = 'free'; P.tx = P.x; P.ty = P.y;
     S.possessing = false;
     S.busy = false; renderNote();
+    // the first thing after the taking, once the room has settled: one momentous question from it (Pierce, 2026-10-10: "after the taking
+    // something needs to be asked by it, something momentous"); the server's why 'taken' says what kind
+    { const night = nightNo, gen = haltGen; setTimeout(() => { if (night === nightNo && gen === haltGen && !halt && S.haunted && !S.busy && !S.ending && !S.struggling) ownMove('taken'); }, 3200); }
     DR.next = G.t + rnd(4000, 6500);
     nlog('possessionEnd'); quietAfter();   // it has landed: nothing of the house's starts for 12 to 20 seconds
   }
@@ -9981,7 +9994,9 @@
     clockCut();
     S.busy = true; S.struggling = true; renderNote(); endDead(true);
     S.goodbyeTries = (S.goodbyeTries || 0) + 1;
-    const second = S.goodbyeTries >= 2, need = second ? 1.5 : 4;
+    // (Pierce, 2026-10-10: "i just am not a fan of letting them hold goodbye and accidentally be done ... let's just not"): no try is ever won;
+    // every hold is the first fight, full strength, and after six seconds of holding it tears the piece away (lost). The night ends on its own.
+    const second = false, need = Infinity;
     if (!BYE.on) byeBegin('typed');   // (the planchette brought onto it began this at once, byeWatch; a typed goodbye begins it here)
     if (!BYE.captioned) { showQuestion('Goodbye.'); BYE.captioned = true; BYE.shown = ''; }
     penHint('hold', 'hold it on good bye');
@@ -10002,7 +10017,7 @@
         if (ptr && ptr.abs && ptr.bx != null && !P.slack) { const f = Math.min(1, dt * 10); P.tx += (ptr.bx - P.tx) * f; P.ty += (ptr.by - P.ty) * f; }
         gb.glow = Math.max(gb.glow, 0.2 + 0.8 * k);
         BYE.wick = k;   // the wick: how far through the hold, at a glance
-        if (held >= need || (second && el > 12000 && S.started)) { clearInterval(iv); res(true); return; }
+        if (held >= 6) { clearInterval(iv); res(false); return; }   // (six seconds of holding: it tears the piece away; nobody wins this)
         if (el > 75000 || !S.started) { clearInterval(iv); res(false); return; }
         // let go (DIRECTION.md 8): once a hand has had it, the first fight is lost the moment nothing holds it and it is off GOOD BYE (half
         // a second, so a thumb that takes it again on the words is not a let go); the second try goes to GOOD BYE by itself
@@ -10790,10 +10805,11 @@
       // the match goes straight to the dark table.
       // (Pierce, 2026-10-05: "i also didnt see the house before it started") the walk up the drive plays on every visit; a return visit may
       // tap past it after its first few seconds (EST.skipAfter)
-      const pre = establish();
-      // the title goes with the dissolve (no match: at once), and lets go of the match's decoder
+      // the match goes out and the screen is completely dark, then a slow fade in to the first frame of the walk up the drive (Pierce,
+      // 2026-10-10: "the match being struck ... should then go out making it completely dark and a slow fade in to right when the walking up video starts")
       const hideTitle = () => { if (!S.started) return; const it = $('#intro'); it.hidden = true; it.classList.remove('striking', 'leaving'); dropTitleMatch(); };
-      if (burning) { $('#intro').classList.add('leaving'); setTimeout(hideTitle, 1000); } else hideTitle();
+      if (burning) { $('#intro').classList.add('leaving'); await wait(1000); hideTitle(); await wait(900); } else hideTitle();
+      const pre = establish();
       S.sitAt = G.t;
       countVisit();
       S.chosen = '';
@@ -11183,6 +11199,7 @@
     const hide = () => {
       if (gone) return; gone = true;
       store.set('warned', seen + 1);
+      try { if (window.GOODBYE_FS && !document.fullscreenElement && !document.webkitFullscreenElement) window.GOODBYE_FS.go(); } catch (e) { /* the browser said no; the title's own link stays */ }   // (Pierce, 2026-10-10: "require it to be a full screen experience")
       try { A.prime(); if (A.samples && PL) A.samples('assets/sfx/' + PL.id + '/'); } catch (e) { /* the strike makes it ready instead */ }
       el.classList.add('out');
       setTimeout(() => { el.hidden = true; el.classList.remove('out'); }, 1150);
@@ -11191,6 +11208,9 @@
     const key = (e) => { if (gone) { removeEventListener('keydown', key); return; } if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); hide(); } };   // (not Escape: a browser does not count Escape as a gesture, and the sound would stay shut)
     addEventListener('keydown', key);
   })();
+  // the cursor hides after 2.5 s without moving and comes back on any movement (Pierce, 2026-10-10: "shouldn't see the cursor until it's needed")
+  { let hideT = 0; const show = () => { document.body.classList.remove('nocursor'); clearTimeout(hideT); hideT = setTimeout(() => { if (!document.activeElement || document.activeElement.id !== 'q') document.body.classList.add('nocursor'); }, 2500); };
+    addEventListener('pointermove', show, { passive: true }); addEventListener('pointerdown', show, { passive: true }); show(); }
   layout(); makeGrain();
   const fontsReady = document.fonts && document.fonts.load
     ? Promise.all(['78px "IM Fell English SC"', '30px "Cedarville Cursive"'].map((f) => document.fonts.load(f).catch(() => {})))

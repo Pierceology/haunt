@@ -196,7 +196,9 @@ body.cine #dock:focus-within { opacity: .55; }
 #establish video { display: none; }
 /* held eight seconds, pushed in slowly (1.00 to 1.12, a 2% rise), ease in and out: the walk up the drive. Its own film, when it
    lands, plays instead (it starts on this still, so nothing jumps) and the push-in stands down. */
-#establish.in { animation: estIn .9s ease-out; }   /* up out of the title: no fill, so the fade-out below still wins */
+#establish.in { animation: estIn 2.6s ease-out; }
+body.looking #hud { opacity: 0; pointer-events: none; transition: opacity .4s; }   /* the camera is away: no box, no button (2026-10-10) */
+body.nocursor, body.nocursor * { cursor: none !important; }   /* the cursor hides when still (2026-10-10) */   /* a slow fade in from the dark (2026-10-10) */   /* up out of the title: no fill, so the fade-out below still wins */
 #establish.in img { animation: estab 8s cubic-bezier(.45,0,.55,1) both; }
 #establish.clip img { animation: none; }
 #establish.clip video { display: block; }
@@ -605,8 +607,8 @@ html.gated #gate { position: fixed; inset: 0; z-index: 70; display: grid; place-
 </script>
 <script>/* ?reel (Pierce's review page) loads reel.js here, before the game: without ?reel nothing of it is fetched */ if (/[?&]reel\b/.test(location.search)) document.write('<script src="reel.js?v=6397e68915"><\/script>');</script>
 <script src="audio.js?v=fbf5140b8a"></script>
-<script src="places.js?v=3354460e6e"></script>
-<script src="game.js?v=e90da9fbc1"></script>
-<script src="fullscreen.js?v=7141f6b697"></script>
+<script src="places.js?v=433bdbef4b"></script>
+<script src="game.js?v=9361eb4744"></script>
+<script src="fullscreen.js?v=2b83fee90c"></script>
 </body>
 </html>

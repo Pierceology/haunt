@@ -25,6 +25,7 @@
       if (p && p.catch) p.catch(() => {});
     } catch (e) { /* the frame refused; nothing to do */ }
   };
+  window.GOODBYE_FS = { go: () => { try { const p = current() ? null : req.call(el); if (p && p.catch) p.catch(() => {}); } catch (e) { /* refused */ } } };   // (the card's first click asks for it, game.js)
   btn.addEventListener('click', toggle);
   if (intro) intro.addEventListener('click', toggle);
   document.addEventListener('fullscreenchange', sync);

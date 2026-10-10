@@ -192,7 +192,7 @@
   FARMHOUSE.props = {
     // a breath lifts the top napkin and sets it down, and the next slides half out and stays (T-NAPKINS, made against the earlier plate: the
     // envelope that plate had below the holder is cut out of the region, so it never shows). Played to 3.0 s, where it is half out; easing.
-    napkins: { clip: PROP_DIR + 'T-NAPKINS.mp4', from: 1.4, to: 3.0, ease: true, reg: [1.39522, 0.2, 1.39384, 4.83], tone: [0.99, 0.986, 0.929],
+    napkins: { made: true, clip: PROP_DIR + 'T-NAPKINS.mp4', from: 1.4, to: 3.0, ease: true, reg: [1.39522, 0.2, 1.39384, 4.83], tone: [0.99, 0.986, 0.929],
       key: PROP_DIR + 'K-NAPKINS.png', box: [713, 0, 971, 235], chg: PROP_DIR + 'K-NAPKINS-CHG.png', chgBox: [722, 12, 961, 227],
       sound: { kind: 'napkin', at: 0.45 }, pos: [840, 120] },
     // the fork turns on the plate with a small scrape and stops, its handle over the rim (T-FORK; key K-FORK-MOVED)
@@ -200,11 +200,11 @@
       key: PROP_DIR + 'K-FORK.png', box: [322, 21, 598, 252], chg: PROP_DIR + 'K-FORK-CHG.png', chgBox: [332, 28, 542, 223],
       sound: { kind: 'fork-scrape', at: 0.5 }, pos: [440, 110] },
     // the ring of keys slides toward the middle with a jingle (T-KEYS; key K-KEYS-MOVED)
-    keys: { clip: PROP_DIR + 'T-KEYS.mp4', from: 0.7, to: 3.25, reg: [1.39538, -0.06, 1.39505, 4.49], tone: [0.993, 0.998, 0.911],
+    keys: { made: true, clip: PROP_DIR + 'T-KEYS.mp4', from: 0.7, to: 3.25, reg: [1.39538, -0.06, 1.39505, 4.49], tone: [0.993, 0.998, 0.911],
       key: PROP_DIR + 'K-KEYS.png', box: [899, 488, 1212, 700], chg: PROP_DIR + 'K-KEYS-CHG.png', chgBox: [908, 488, 1207, 693],
       sound: { kind: 'keys', at: 0.45 }, pos: [1100, 610] },
     // the cold mug turns on the planks until its handle points at the player (T-MUG-TURN; key K-MUG-TURNED)
-    mug: { clip: PROP_DIR + 'T-MUG-TURN.mp4', from: 0.08, to: 3.92, reg: [1.3955, -0.07, 1.39512, 4.45], tone: [0.996, 0.998, 0.875],
+    mug: { made: true, clip: PROP_DIR + 'T-MUG-TURN.mp4', from: 0.08, to: 3.92, reg: [1.3955, -0.07, 1.39512, 4.45], tone: [0.996, 0.998, 0.875],
       key: PROP_DIR + 'K-MUG.png', box: [240, 501, 500, 768], chg: PROP_DIR + 'K-MUG-CHG.png', chgBox: [264, 563, 480, 768],
       sound: { kind: 'mug-turn', at: 0.3 }, pos: [370, 660] },
     // one arm of the folded glasses opens, then the other, as if put on a face that is not there (T-GLASSES-OPEN; key K-GLASSES-OPEN)
