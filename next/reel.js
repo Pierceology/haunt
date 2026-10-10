@@ -358,7 +358,7 @@ html.reel-side body{position:fixed!important;top:0!important;left:0!important;bo
     // canvas stays at 0,0), so the game frames the table exactly as it does in the whole window, smaller, both candles in view; put away, the
     // game has the whole window again
     document.documentElement.appendChild(panel);
-    const band = () => { const w = Math.max(200, innerWidth - 340), h = (w * innerHeight) / innerWidth; document.documentElement.style.setProperty('--reel-band', Math.max(0, Math.round(innerHeight - h)) + 'px'); };
+    const band = () => { document.documentElement.style.setProperty('--reel-band', '0px'); };   // (the game fills the full height beside the panel: Pierce, 2026-10-10, "black bar on reel")
     addEventListener('resize', band);
     const side = (open) => { panel.classList.toggle('away', !open); document.documentElement.classList.toggle('reel-side', open); store.set('away', !open); band(); dispatchEvent(new Event('resize')); };
     side(!store.get('away', false));
