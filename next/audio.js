@@ -558,6 +558,24 @@
   };
 
   // A letter lands: a small wooden tock.
+  // A pencil writing on paper, for as long as ms: filtered noise in strokes (60 to 180 ms each, a breath between), the way a hand writes a
+  // line (the card before the title is written in with it, 2026-10-10). Returns a function that stops it early.
+  A.write = function (ms) {
+    if (!A.ready) return () => {};
+    const t0 = now(), end = t0 + Math.max(0.2, (ms || 1000) / 1000);
+    const s = noiseSrc(); const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2400; bp.Q.value = 1.6;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 900;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0, t0);
+    let t = t0;
+    while (t < end) {
+      const stroke = rnd(0.06, 0.18), a = rnd(0.35, 0.9);
+      g.gain.linearRampToValueAtTime(a, t + 0.012); g.gain.setValueAtTime(a * rnd(0.6, 1), t + stroke * 0.5); g.gain.linearRampToValueAtTime(0.02, t + stroke);
+      t += stroke + rnd(0.02, 0.07);
+    }
+    g.gain.linearRampToValueAtTime(0, end + 0.03);
+    s.connect(hp); hp.connect(bp); bp.connect(g); out(g, 0.16); s.start(t0, rnd(0, 1), end - t0 + 0.1);
+    return () => { try { g.gain.cancelScheduledValues(now()); g.gain.linearRampToValueAtTime(0, now() + 0.05); } catch (e) { /* gone */ } };
+  };
   A.tock = function (hard) {
     if (!A.ready) return;
     const t = now();

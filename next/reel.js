@@ -172,6 +172,7 @@
       ['phone', 'The phone upstairs', 'a phone rings twice somewhere upstairs (the Basement\'s; the Farmhouse never calls it)', () => { ensureAudio(); A.phone(2); return true; }],
     ];
     for (const [k, label, what, fn] of HOUSE) add('house:' + k, { group: 'house', label, what, status: k === 'phone' ? 'made' : 'live', sub: 'The house\'s own', fire: async () => { const r = await fn(); return r === undefined ? true : r; } });
+    add('house:card-written', { group: 'house', label: 'The card, written in', what: 'the card before the title, your handwriting written in line by line with the pen heard; touch it to go on (Pierce, 2026-10-10)', status: 'live', sub: 'Before the table', fire: () => GB.writeCard() });
     add('house:buzz', { group: 'house', label: 'The buzz in the hand', what: 'navigator.vibrate on every knock and pull: a laptop has no motor and phones are turned away at the door, so it does nothing tonight', status: 'missing', sub: 'The house\'s own' });
     add('house:blue', { group: 'house', label: 'Blue flames', what: 'the countdown ends with the flames going blue (T-BLUE): the old table\'s blue films exist, nothing plays them, and none was made on the new plate', status: 'made', sub: 'The house\'s own' });
     for (const [row, p] of Object.entries(GB.SHAKE.table)) {

@@ -11196,8 +11196,66 @@
     const seen = +store.get('warned', 0) || 0;
     el.hidden = false;
     let gone = false;
+    // The card is written in by hand (Pierce, 2026-10-10: "a button so we can see/hear the before you sit down message being written"): his card
+    // sits as a ghost until the first touch, which is the gesture the sound needs; then the ink comes in line by line, left to right, the pen
+    // heard, and a second touch (or its end and a touch) goes on. The lines are found on his picture itself (rows of ink), never drawn new.
+    const img = el.querySelector('.cardImg'), ink = el.querySelector('.cardInk');
+    const CARD = { bands: null, writing: false, written: false, raf: 0, stop: null, pic: null };
+    const place = () => { if (!img || !ink) return; const r = img.getBoundingClientRect(); ink.style.left = r.left + 'px'; ink.style.top = r.top + 'px'; ink.style.width = r.width + 'px'; ink.style.height = r.height + 'px'; if (ink.width !== Math.round(r.width * DPR) || ink.height !== Math.round(r.height * DPR)) { ink.width = Math.round(r.width * DPR); ink.height = Math.round(r.height * DPR); } };
+    const bands = () => {
+      if (CARD.bands) return CARD.bands;
+      const pic = CARD.pic; if (!pic || !pic.naturalWidth) return null;
+      const w = pic.naturalWidth, h = pic.naturalHeight, c = document.createElement('canvas'); c.width = w; c.height = h;
+      const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(pic, 0, 0); const d = g.getImageData(0, 0, w, h).data;
+      const x0 = Math.round(w * 0.09), x1 = Math.round(w * 0.95), ya = Math.round(h * 0.1), yb = Math.round(h * 0.92), rows = [];
+      for (let y = 0; y < h; y++) { let n = 0, lo = -1, hi = -1; if (y >= ya && y < yb) for (let x = x0; x < x1; x += 2) { const i = (y * w + x) * 4; const l = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11; if (l < 70 && d[i + 3] > 200) { n++; if (lo < 0) lo = x; hi = x; } } rows.push([n, lo, hi]); }
+      const out = []; let run = null, wide = (x1 - x0) / 2 * 0.45;   // (a row of ink is a few dark pixels, never nearly the whole width: that is an edge or a crease)
+      for (let y = 0; y < h; y++) { const on = rows[y][0] >= 3 && rows[y][0] < wide; if (on && !run) run = { y0: y, y1: y, lo: rows[y][1], hi: rows[y][2] }; else if (on) { run.y1 = y; run.lo = Math.min(run.lo, rows[y][1]); run.hi = Math.max(run.hi, rows[y][2]); } else if (run && y - run.y1 > Math.round(h * 0.012)) { out.push(run); run = null; } }
+      if (run) out.push(run);
+      CARD.bands = out.filter((b) => b.y1 - b.y0 >= h * 0.014).map((b) => ({ y0: Math.max(0, b.y0 - 4), y1: Math.min(h, b.y1 + 5), lo: b.lo, hi: b.hi }));
+      CARD.text = { x0, x1, ya, yb };
+      return CARD.bands;
+    };
+    // the card itself is drawn sharp, edges and all; over the writing area the ink is smudged out (his picture blurred, nothing new drawn) except
+    // where it has been written: the finished lines, and the line being written up to the pen
+    const smudge = () => { if (CARD.blur && CARD.blur.width === ink.width) return CARD.blur; const c = document.createElement('canvas'); c.width = ink.width; c.height = ink.height; const g = c.getContext('2d'); g.filter = 'blur(' + Math.max(6, ink.width / 110) + 'px)'; g.drawImage(CARD.pic, 0, 0, ink.width, ink.height); CARD.blur = c; return c; };
+    const paint = (done, cur, x) => {
+      const pic = CARD.pic; if (!pic || !ink || !CARD.text) return; place();
+      const g = ink.getContext('2d'); const sx = ink.width / pic.naturalWidth, sy = ink.height / pic.naturalHeight, T = CARD.text;
+      g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, ink.width, ink.height);
+      g.drawImage(pic, 0, 0, ink.width, ink.height);
+      g.save(); g.beginPath(); g.rect(T.x0 * sx, T.ya * sy, (T.x1 - T.x0) * sx, (T.yb - T.ya) * sy);
+      done.forEach((b) => g.rect(T.x0 * sx, b.y0 * sy, (T.x1 - T.x0) * sx, (b.y1 - b.y0) * sy));
+      if (cur) g.rect(T.x0 * sx, cur.y0 * sy, Math.max(0, Math.min(T.x1, x) - T.x0) * sx, (cur.y1 - cur.y0) * sy);
+      g.clip('evenodd'); g.drawImage(smudge(), 0, 0); g.restore();
+    };
+    const finishWrite = () => { CARD.writing = false; CARD.written = true; if (CARD.stop) CARD.stop(); cancelAnimationFrame(CARD.raf); el.classList.remove('unwritten'); if (ink) ink.getContext('2d').clearRect(0, 0, ink.width, ink.height); };
+    const write = () => {
+      const bs = bands(); if (!bs || !bs.length || CARD.writing) { finishWrite(); return Promise.resolve(); }
+      CARD.writing = true; el.classList.add('unwritten');
+      return new Promise((res) => {
+        let i = 0; const done = [];
+        const next = () => {
+          if (!CARD.writing) { res(); return; }
+          if (i >= bs.length) { finishWrite(); res(); return; }
+          const total = bs.reduce((a, q) => a + Math.max(60, q.hi - q.lo), 0), b = bs[i], px = Math.max(60, b.hi - b.lo), dur = Math.max(450, 8200 * px / total), t0 = performance.now();
+          CARD.stop = A.write ? A.write(dur) : null;
+          const tick = () => { if (!CARD.writing) return; const k = Math.min(1, (performance.now() - t0) / dur); paint(done, b, b.lo + (b.hi - b.lo + 24) * k); if (k < 1) CARD.raf = requestAnimationFrame(tick); else { done.push(b); i++; setTimeout(next, i < bs.length ? rnd(160, 340) : 500); } };
+          CARD.raf = requestAnimationFrame(tick);
+        };
+        next();
+      });
+    };
+    if (img) { const pic = new Image(); pic.onload = () => { CARD.pic = pic; el.classList.add('unwritten'); place(); if (bands()) paint([], null, 0); }; pic.src = img.getAttribute('src'); }   // (the card is on screen at once, its ink smudged, before any touch)
+    addEventListener('resize', () => { if (!el.hidden) { place(); if (!CARD.written && !CARD.writing && bands()) paint([], null, 0); } });
+    // the reel: the card over whatever is on, written again, then gone (window.GOODBYE.writeCard)
+    window.__writeCard = async () => { el.hidden = false; el.classList.remove('out'); gone = false; CARD.written = false; CARD.writing = false; el.classList.add('unwritten'); if (ink) ink.getContext('2d').clearRect(0, 0, ink.width, ink.height); place(); await write(); };
     const hide = () => {
-      if (gone) return; gone = true;
+      if (gone) return;
+      // the first touch writes the card (and is the gesture the sound needs); the second goes on. A touch while it writes finishes it at once.
+      if (CARD.pic && !CARD.written && !CARD.writing) { try { A.prime(); } catch (e) { /* the strike makes it ready */ } write(); return; }
+      if (CARD.writing) { finishWrite(); return; }
+      gone = true;
       store.set('warned', seen + 1);
       try { if (window.GOODBYE_FS && !document.fullscreenElement && !document.webkitFullscreenElement) window.GOODBYE_FS.go(); } catch (e) { /* the browser said no; the title's own link stays */ }   // (Pierce, 2026-10-10: "require it to be a full screen experience")
       try { A.prime(); if (A.samples && PL) A.samples('assets/sfx/' + PL.id + '/'); } catch (e) { /* the strike makes it ready instead */ }
@@ -11229,7 +11287,7 @@
   // (?reel, Pierce's review page, reel.js, gets this same object: it fires every trick by name. Without ?debug or ?reel there is no window.GOODBYE.)
   if (/[?&](debug|reel)\b/.test(location.search)) {
     window.GOODBYE = {
-      S, G, P, ask, spell, noteCandleNamed, candleWanted, splitSay, blinkNow, playFilm, cutTo, REEL, propPlay, lookAt, countBeads, byeOpen, byeOpensAt, nightSecs, renderNote, intercept, houseEvent, travel, PLACES, PROG, IMG,
+      S, G, P, ask, spell, noteCandleNamed, candleWanted, splitSay, blinkNow, playFilm, cutTo, REEL, propPlay, lookAt, countBeads, byeOpen, byeOpensAt, nightSecs, renderNote, writeCard: () => (window.__writeCard ? window.__writeCard() : Promise.resolve()), intercept, houseEvent, travel, PLACES, PROG, IMG,
       props: PROPAPI,
       looks: LOOKS_API,   // (the looks package)
       get place() { return PL; },
