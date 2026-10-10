@@ -5871,7 +5871,8 @@
   function buzz(pattern) { try { if (navigator.vibrate && !S.muted) navigator.vibrate(pattern); } catch (e) { /* no vibration */ } }
   // The screen cut (reply.blink; DIRECTION.md 3, rung 5): their picture goes black for a quarter of a second, a hard cut, not the lerped
   // G.black. draw() paints it last, over everything, flames included, while G.blinkUntil is ahead of the clock.
-  function blinkNow(why) { G.blinkUntil = performance.now() + 250; nlog('blinkScreen', why ? { ms: 250, why } : { ms: 250 }); }
+  // The screen cut is out (Pierce, 2026-10-10: "no blink ever, terrible effect/concept"): nothing goes black; the ask is written to the log and nothing else.
+  function blinkNow(why) { nlog('blinkScreen', why ? { off: true, why } : { off: true }); }
   // The heartbeat in their hand (DIRECTION.md 3, rung 5): from the moment the house is let in, the phone buzzes in a slow heartbeat, two
   // beats about every 1.1 s (navigator.vibrate, where a phone has it; an iPhone has none), under A.heartbeat's own low pulse. It goes
   // with the first beat of the won ending, when the demon leaves, and with any stop (stopNight); the title puts it away (resetScene).
@@ -8383,15 +8384,22 @@
     // haunted, the camera glitches: their picture goes black for a quarter second, twice in the night, at two moments drawn when the house
     // was let in (enterHaunted), 20 to 90 s apart; a reply that blinked already counts toward the two
     if (S.haunted && !S.struggling && !S.ending && NIGHT.blinkAt && NIGHT.blinks < 2 && now >= NIGHT.blinkAt[NIGHT.blinks]) { NIGHT.blinks++; blinkNow('haunted'); }
-    // drag it to GOOD BYE and hold it there: haunted, the struggle starts; before that, one second ends the night gently
+    // drag it to GOOD BYE and hold it there: haunted, the struggle starts. Before the taking nothing ends: the piece slides off GOOD BYE on its
+    // own and the night goes on (Pierce, 2026-10-10: "goodbye should just slide off before the taking"; "who would want to risk holding that
+    // thinking their game is over"). The candle is the exit before the taking; GOOD BYE is the ending only once the house is in.
     const onGB = P.dragging && Math.abs(P.x - GLYPHS.GOODBYE.x) < 170 && Math.abs(P.y - GLYPHS.GOODBYE.y) < 60;
     if (onGB && !S.busy && !S.possessing && !S.struggling && !S.awaitingYesNo) {
-      DR.gb += dt; GLYPHS.GOODBYE.glow = Math.max(GLYPHS.GOODBYE.glow, Math.min(1, DR.gb));
-      // its last words are asked for the moment the thumb lands (haunted: the fight's; before the taking: the one line that goes with them)
-      if (S.haunted && DR.gb > 0.05) askEnding('won');
-      if (!S.haunted && DR.gb > 0.3) askEnding('bye');
-      if (S.haunted && DR.gb > 0.4) { DR.gb = 0; goodbyeStruggle(); return; }   // (the tick before half a second: the pulls begin at about 600 ms, DIRECTION.md 13.9)
-      if (!S.haunted && DR.gb > 1) { DR.gb = 0; goodbyeGentle(); return; }
+      DR.gb += dt;
+      if (S.haunted) {
+        GLYPHS.GOODBYE.glow = Math.max(GLYPHS.GOODBYE.glow, Math.min(1, DR.gb));
+        if (DR.gb > 0.05) askEnding('won');   // its last words are asked for the moment the thumb lands (the fight's)
+        if (DR.gb > 0.4) { DR.gb = 0; goodbyeStruggle(); return; }   // (the tick before half a second: the pulls begin at about 600 ms, DIRECTION.md 13.9)
+      } else if (DR.gb > 0.3) {
+        DR.gb = 0; P.dragging = false; P.slack = false; nlog('byeSlide', { at: Math.round(nightSecs()) });
+        if (A.rec) A.rec('drag', 'under', 0.35);
+        moveTo(0, 40, { pace: 1.3, dwell: 500 }).catch(() => {});   // off GOOD BYE, back toward the middle, as if pushed
+        return;
+      }
     } else DR.gb = 0;
     if (deadNow()) return;
     if (S.busy || S.queue.length || S.possessing || S.struggling || S.calming || DR.running || traveling || S.vs) return;
@@ -9898,8 +9906,7 @@
     // T-BOARD-SLIDE film moves the wood the same inch when there is one: the drawn board, its printing, the piece and every pointer ride
     // with it, G.boardDy); the drag is heard under the table when a take of it exists. The photograph of the table does not move.
     {
-      const d0 = G.boardDy, d1 = 40;   // (40 world units: about an inch on the 560-unit board; a second taking finds it there and leaves it)
-      if (d1 !== d0) { nlog('boardSlide', { dy: d1 }); if (A.rec) A.rec('drag', 'under', 0.5); animate(900, (k) => { G.boardDy = d0 + (d1 - d0) * k; }).catch(() => {}); }
+      // (the board no longer slides an inch toward them: Pierce, 2026-10-10, "at one point the table slides, never do that"; G.boardDy stays 0)
     }
     // and it slides off the letters, down the board to the bottom edge, toward whoever is holding the phone, and stops
     P.ymax = 372;

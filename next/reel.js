@@ -418,13 +418,15 @@ html.reel-side body{position:fixed!important;top:0!important;left:0!important;bo
       else { ARC.t = m * 60; ARC.M = m; ARC.bonus = 0; ARC.B = ARC.Bd = 0; }
       return 'the faces\' clock at minute ' + m;
     };
-    ctlRow('Minutes at the table (the faces\' clock)', [[0, () => setMinutes(0), 'asleep: the printed faces, still'], [2, () => setMinutes(2), 'the tells: a lid lifts a pixel while you look away'], [4, () => setMinutes(4), 'awake, the moon shy'], [7, () => setMinutes(7), 'sympathy: an ember in its eyes'], [10, () => setMinutes(10), 'uneasy: a crack, the ink warming'], [13, () => setMinutes(13), 'hungry: the glow, a scorch ring'], [16, () => setMinutes(16), 'angry: ink red, ember eyes, the glow stays'], [22, () => setMinutes(22), 'angry, all the way']]
-      .map(([m, fn, tip]) => [String(m), fn, tip]));
-    const rates = ctlRow('The clock runs', [['×1', () => { GB.arc.rate(1); return 'the faces\' clock at its own speed'; }], ['×10', () => { GB.arc.rate(10); return 'the faces\' clock ten times fast'; }], ['×60', () => { GB.arc.rate(60); return 'a minute a second'; }]]);
+    // where in the night (Pierce, 2026-10-10: "the x1 x10 x60 is not great ... make this thing much easier for me"): one row of plain words, no rates
+    ctl.append(el('div', 'sub', 'A night is about twenty minutes. The free part is the first two or three. The taking comes between minute three and six, sooner if they dare it. Then the house is in until they win GOOD BYE; at about twenty-five it finishes on its own.'));
+    ctlRow('Jump to', [['the start', () => setMinutes(0), 'the printed faces, asleep and still'], ['minute 2', () => setMinutes(2), 'the first tells: a lid lifts a pixel while you look away'], ['minute 5', () => setMinutes(5), 'awake; the moon shy, the sun afraid'],
+      ['minute 8', () => setMinutes(8), 'sympathy: an ember in the moon\'s eyes'], ['minute 11', () => setMinutes(11), 'uneasy: a crack, the ink warming'], ['minute 14', () => setMinutes(14), 'hungry: the glow, a scorch ring'], ['minute 17', () => setMinutes(17), 'angry: ink red, ember eyes']]);
+    GB.arc.rate(1);
     ctlRow('The dread', [0, 2, 4, 6, 8, 10].map((d) => [String(d), () => { GB.setDread(d); return 'dread ' + d; }]));
     ctlRow('The night', [
       ['The taking', () => { GB.possess('reel'); return 'the taking: about thirty seconds'; }, 'NO to YES, the smoke, the silence, the thrum'],
-      ['Hold GOOD BYE', async () => { GB.bye.begin('reel'); await sleep(3000); GB.bye.end('reel'); return 'held three seconds, let go'; }, 'the first second and a half: the evil faces, the tug, a line'],
+      ['Hold GOOD BYE', async () => { GB.bye.begin('reel'); await sleep(3000); GB.bye.end('reel'); return 'held three seconds, let go'; }, 'after the taking: the evil faces, the tug, a line; before the taking the piece just slides off'],
       ['Left candle out', () => { GB.blowCandle(0, { dur: 700, dir: -1 }); return 'the left candle out (the sun\'s side)'; }],
       ['Right candle out', () => { GB.blowCandle(1, { dur: 700, dir: 1 }); return 'the right candle out (the moon\'s side)'; }],
       ['Relight', () => { GB.relightCandle(0); GB.relightCandle(1); GB.G.blackT = 0; return 'both lit'; }],
@@ -434,7 +436,7 @@ html.reel-side body{position:fixed!important;top:0!important;left:0!important;bo
       ['The hour', () => { const h = new Date().getHours(); GB.clockTest(h); return 'the clock strikes ' + (h % 12 || 12); }, 'the strike for the hour it is now'],
       ['Midnight', () => { GB.clockTest(0); return 'twelve, then the bed drops out two seconds and comes back without the crickets'; }],
       ['The thrum', () => { A.thrum('rise4'); return 'the thrum'; }], ['The silence', () => { A.silence(1500); return 'the silence cut'; }],
-      ['The blink', () => { GB.blinkScreen('reel'); return 'the screen cut: a quarter second of black'; }], ['The shake', () => { GB.shake('slam'); return 'the shake: a slam, 5 px'; }],
+      ['The blink', () => { GB.blinkScreen('reel'); return 'does nothing now: the screen cut is out (Pierce, 2026-10-10)'; }], ['The shake', () => { GB.shake('slam'); return 'the shake: a slam, 5 px'; }],
     ]);
     scroll.append(ctl);
 
@@ -537,7 +539,6 @@ html.reel-side body{position:fixed!important;top:0!important;left:0!important;bo
         if (now.dataset.msg && now.dataset.msgAt !== now.dataset.msg) { now.dataset.msgAt = now.dataset.msg; now.dataset.msgT = String(Date.now()); }
         if (now.dataset.msg && Date.now() - (+now.dataset.msgT || 0) > 6000) { now.dataset.msg = ''; now.dataset.msgAt = ''; }
         now.textContent = where + ' · minute ' + M.toFixed(1) + ' (' + band + ') · dread ' + (+S.dread).toFixed(1) + ' · candles ' + (c[0] >= 1 ? 'out' : 'lit') + '/' + (c[1] >= 1 ? 'out' : 'lit') + ' · clock ' + A.clockState() + (S.haunted ? ' · haunted' : '') + ' · faces ' + GB.FACE.sun.expr + '/' + GB.FACE.moon.expr + (now.dataset.msg ? ' · ' + now.dataset.msg : '');
-        rates.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.textContent === '×' + ARC.rate));
       } catch (e) { /* between nights */ }
     }, 500);
     window.__reel = { NET, KEPT, render, fire: fireItem, start, panel };
