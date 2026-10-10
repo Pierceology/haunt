@@ -1083,11 +1083,11 @@
   const MOON_FACES = {
     neutral: { oL: 0.8, oR: 0.8, brow: 0.5, raise: 0.1, curve: -0.25, open: 0, width: 0.8, teeth: 0, tongue: 0, tilt: 0 },
     // one eye narrowed, one corner up
-    smirk: { oL: 0.78, oR: 0.4, brow: -0.35, raise: 0.1, curve: 0.3, open: 0, width: 0.85, teeth: 0, tongue: 0, tilt: 0.75, look: 'you' },
+    smirk: { oL: 0.78, oR: 0.54, brow: -0.35, raise: 0.1, curve: 0.3, open: 0, width: 0.85, teeth: 0, tongue: 0, tilt: 0.75, look: 'you' },
     // straight out, wide and unblinking, nothing in the mouth
     stare: { oL: 1.28, oR: 1.28, brow: 0, raise: 0.25, curve: 0, open: 0, width: 0.5, teeth: 0, tongue: 0, tilt: 0, look: 'you', still: true },
     // a long thin crescent, the eyes narrowed over it, a line of teeth
-    grin: { oL: 0.36, oR: 0.36, brow: -0.6, raise: 0.1, curve: 1.25, open: 0.14, width: 1.45, teeth: 1, tongue: 0, tilt: 0, look: 'you' },
+    grin: { oL: 0.5, oR: 0.5, brow: -0.6, raise: 0.1, curve: 1.25, open: 0.14, width: 1.45, teeth: 1, tongue: 0, tilt: 0, look: 'you' },
     sneer: { oL: 0.5, oR: 0.62, brow: -1, raise: 0, curve: -0.45, open: 0, width: 0.8, teeth: 0, tongue: 0, tilt: -0.7, look: 'you' },
     bored: { oL: 0.3, oR: 0.3, brow: 0.15, raise: 0, curve: -0.08, open: 0, width: 0.62, teeth: 0, tongue: 0, tilt: 0, look: 'away' },
     // lips parted over a line of teeth, the eyes wide on them
@@ -1145,7 +1145,7 @@
   // Their eyes go where a sound came from (2026-10-05): the sun a beat after it, the moon a beat after that, held a moment, then back.
   // where: left, right, under (the cellar), above (the attic), behind (past them, over their shoulder), ear-left / ear-right (a voice at an
   // ear: both faces look at that side of the one holding the phone).
-  const LOOK_AT = { left: [-1, 0.08], right: [1, 0.08], under: [0.1, 1], above: [-0.05, -1], behind: [0.35, -0.55], 'ear-left': [-0.8, -0.1], 'ear-right': [0.8, -0.1] };
+  const LOOK_AT = { left: [-1, 0.08], right: [1, 0.08], under: [0.1, 1], above: [-0.05, -1], behind: [0, 0.05], 'ear-left': [-0.8, -0.1], 'ear-right': [0.8, -0.1] };
   // (lead: the sound is lead ms away and the sun knows: its eyes go at once, the moon's a beat after the sound, as before)
   function lookToward(where, ms, lead) {
     const v = LOOK_AT[where]; if (!v || S.possessing) return;
@@ -1335,12 +1335,12 @@
   // the arc's targets, in the faces' own parameters (none of them is an entry of a set, and none changes one). Small: the burns do the rest.
   const AP = {
     moon: {
-      shy:      { oL: 0.62, oR: 0.62, brow: 0.75, raise: 0.05, curve: -0.15, open: 0, width: 0.7, teeth: 0, tongue: 0, tilt: 0 },
+      shy:      { oL: 0.72, oR: 0.72, brow: 0.75, raise: 0.05, curve: -0.15, open: 0, width: 0.7, teeth: 0, tongue: 0, tilt: 0 },
       sympathy: { oL: 0.78, oR: 0.78, brow: 1.0, raise: 0.15, curve: -0.3, open: 0, width: 0.68, teeth: 0, tongue: 0, tilt: 0 },
       uneasy:   { oL: 0.8, oR: 0.74, brow: 0.35, raise: 0.05, curve: -0.1, open: 0, width: 0.8, teeth: 0, tongue: 0, tilt: 0.05 },
       hungry:   { oL: 0.92, oR: 0.92, brow: 0.0, raise: 0.1, curve: 0.05, open: 0, width: 0.9, teeth: 0, tongue: 0, tilt: 0.1 },
-      angry:    { oL: 0.6, oR: 0.6, brow: -0.8, raise: 0, curve: -0.35, open: 0, width: 0.85, teeth: 0, tongue: 0, tilt: -0.05 },
-      flinch:   { oL: 0.3, oR: 0.36, brow: 1.0, raise: 0.1, curve: -0.55, open: 0, width: 0.6, teeth: 0, tongue: 0, tilt: -0.1 },
+      angry:    { oL: 0.7, oR: 0.7, brow: -0.8, raise: 0, curve: -0.35, open: 0, width: 0.85, teeth: 0, tongue: 0, tilt: -0.05 },
+      flinch:   { oL: 0.42, oR: 0.46, brow: 1.0, raise: 0.1, curve: -0.55, open: 0, width: 0.6, teeth: 0, tongue: 0, tilt: -0.1 },
       pain:     { oL: 0.66, oR: 0.66, brow: 1.2, raise: 0.25, curve: -0.6, open: 0, width: 0.62, teeth: 0, tongue: 0, tilt: 0 },
       smile:    { oL: 0.78, oR: 0.78, brow: 0, raise: 0.1, curve: 0.45, open: 0, width: 1.0, teeth: 0, tongue: 0, tilt: 0.1 },
     },
@@ -1387,7 +1387,7 @@
   function arcReset() {
     const was = ARC.on;
     ARC.B = 0; ARC.Bd = 0; ARC.watched = false; ARC.rayLag = 0; ARC.hair = { sun: 0, moon: 0 }; ARC.look = { sun: { x: 0, y: 0.95 }, moon: { x: 0, y: 0.95 } }; ARC.shot = { sun: null, moon: null };
-    ARC.dorm = { sun: { ...SUN_FACES.shut }, moon: { ...MOON_FACES.neutral, oL: 0.26, oR: 0.26 } };   // the printed art asleep: the sun's own shut, the moon's own neutral with its lids heavy
+    ARC.dorm = { sun: { ...SUN_FACES.shut }, moon: { ...MOON_FACES.neutral, oL: 0.42, oR: 0.42 } };   // (the lids a little less heavy: Pierce, 2026-10-10, "round it out a tiny bit")   // the printed art asleep: the sun's own shut, the moon's own neutral with its lids heavy
     ARC.tellOff = { sun: { keys: {}, dx: 0, hair: 0 }, moon: { keys: {}, dx: 0, hair: 0 } };
     ARC.wk = { first: rnd(30, 60), next: 0, awake: 0, last: '', lastType: { sun: '', moon: '' }, tell: null, n: 0, cancels: 0, d: { sun: Infinity, moon: Infinity }, log: [] };
     ARC.wk.next = ARC.wk.first;
@@ -6768,7 +6768,7 @@
     if (r.sfx && r.sfx !== 'none') { playMoveSound({ mark: r.sfx, side: r.sfx_side }); done.sfx = r.sfx; } else done.sfx = 'none';
     // the production's own calls (DIRECTION.md 6): the thrum, the silence, the buzz and the blink in their hand, a picture on the table, a
     // cut to another room. A film the page has no file for draws nothing (playFilm, cutTo say so in the log); what was asked is recorded.
-    if (r.thrum && A.thrum) { A.thrum(r.thrum); done.thrum = r.thrum; }
+    if (r.thrum) nlog('thrum', { off: true, shape: r.thrum });   // (the thrum is gone: Pierce, 2026-10-10, "lose the thrum parts entirely")
     if (r.silence > 0) nlog('silence', { ms: r.silence, off: true });   // (the room never goes silent: Pierce, 2026-10-10)
     if (r.buzz) { buzz(r.buzz.split(',').map(Number)); done.buzz = r.buzz; }
     if (r.blink) { blinkNow(); done.blink = true; NIGHT.blinks++; }   // (the demon's blink counts toward the haunted phase's two)
@@ -6941,7 +6941,8 @@
       case 'house': A.house(); break;
       // the demon's own: at the ear, under the floor, on the glass in their hand, in the wall
       case 'whisper': if (A.ear) A.ear('whisper', sd); break;   // (the recorded take, or nothing: the synthesized whisper is gone)
-      case 'shh': case 'click': if (A.ear) A.ear(k, sd); break;
+      case 'shh': if (A.ear) A.ear(k, sd); break;
+      case 'click': nlog('click', { off: true }); break;   // (no clicks: Pierce, 2026-10-10, "lose clicks")
       case 'voices': rec('voices', 'under', 0.9); break;
       case 'tap': if (A.glass) A.glass('tap'); break;
       case 'walls': if (A.wall) A.wall('walls', sd); break;
@@ -9323,7 +9324,7 @@
       case 'spam': { TROLL.spamUntil = G.t + 4000; setFaces('shut', 'watch', 4000); knockUnder(); break; }   // the sun shuts its eyes until the rate drops; a knock under the table for it
       case 'about': { setFaces('afraid', 'grin', 3000); const o = offFaces(REST.x, REST.y + 10); dropPath(); trollMove(o.x, o.y, { dur: 800, dwell: 2200, curve: 0.12 }).catch(() => {}); break; }   // it is coming closer to talk
       case 'dare': {
-        setFaces('warn', 'hungry', 3200); if (A.thrum) A.thrum('rise2');
+        setFaces('warn', 'hungry', 3200);   // (no sub swell: the thrum is gone, 2026-10-10)
         const was = G.leanTo; G.leanTo = true; const night = nightNo;
         setTimeout(() => { if (night === nightNo && !S.possessing && !S.struggling) G.leanTo = was; }, 2200);   // both candles lean toward the piece
         break;
@@ -9863,7 +9864,7 @@
     // 0 s: the sub rises at once, under the room, which never stops (Pierce, 2026-10-10: the silence cut that used to open the taking "goes to
     // straight quietness, clearly a bug ... struggling to get the audio to play right away and it always looks bad"; and 2026-10-02: "the sound
     // goes silent like a break"). The piece begins to move at 0.5 s with its scrape heard; the thrum is the only thing that is new.
-    if (A.thrum) A.thrum('rise4');
+    // (no sub swell at the taking: the thrum is gone, Pierce 2026-10-10)
     // 1.5 s: smoke rises off both wicks; the flames bend toward the planchette and flutter; the clock goes on
     later(1500, () => {
       A.flutter(1);

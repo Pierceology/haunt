@@ -1244,7 +1244,9 @@
       } catch (e) { /* gone */ }
     }
   }
-  A.thrum = function (shape) {
+  // (the thrum is gone: Pierce, 2026-10-10, "lose the thrum parts entirely like delete": nothing is played; the old swell is kept below under another name for the record)
+  A.thrum = function () { return 0; };
+  A.thrumOld = function (shape) {
     if (!A.ready) return 0;
     const sh = Object.prototype.hasOwnProperty.call(THRUM_SHAPES, shape) ? THRUM_SHAPES[shape] : THRUM_SHAPES.rise2;
     thrumStop(0.08);
