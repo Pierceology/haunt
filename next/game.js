@@ -9843,11 +9843,10 @@
     const live = () => !halt && gen === haltGen && S.possessing;
     const later = (ms, fn) => setTimeout(() => { if (live()) { try { fn(); } catch (e) { /* a layer never takes the table down */ } } }, Math.max(0, T0 + ms - G.t));
 
-    // 0 s: the one silence cut of the night (DIRECTION.md 2 and 7): every sound out, the bed too, a second and a half of nothing. No sound of
-    // the room's starts inside it (the piece begins to move at 0.5 s, and in the silence its scrape is not heard). At 1.2 s the sub rises out
-    // of the nothing (the thrum is on the master, so it is heard through the silence).
-    if (A.silence) A.silence(1500);
-    later(1200, () => { if (A.thrum) A.thrum('rise4'); });
+    // 0 s: the sub rises at once, under the room, which never stops (Pierce, 2026-10-10: the silence cut that used to open the taking "goes to
+    // straight quietness, clearly a bug ... struggling to get the audio to play right away and it always looks bad"; and 2026-10-02: "the sound
+    // goes silent like a break"). The piece begins to move at 0.5 s with its scrape heard; the thrum is the only thing that is new.
+    if (A.thrum) A.thrum('rise4');
     // 1.5 s: smoke rises off both wicks; the flames bend toward the planchette and flutter; the clock goes on
     later(1500, () => {
       A.flutter(1);

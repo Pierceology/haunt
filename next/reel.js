@@ -285,62 +285,62 @@
     // ---------------------------------------------------------------- the panel
     const css = `
 html.reel-side{background:#000}
-html.reel-side body{position:fixed!important;top:0!important;left:0!important;bottom:var(--reel-band,0px)!important;right:340px!important;width:auto!important;height:auto!important;transform:translateZ(0);overflow:hidden}
-#reel{position:fixed;top:0;right:0;bottom:0;width:340px;z-index:2147483000;display:flex;flex-direction:column;box-sizing:border-box;
-  background:rgba(12,10,8,.94);color:#b8ab8e;border-left:1px solid #2a231b;font:13px/1.4 var(--fell,'IM Fell English',Georgia,serif);
+html.reel-side body{position:fixed!important;top:0!important;left:0!important;bottom:var(--reel-band,0px)!important;right:400px!important;width:auto!important;height:auto!important;transform:translateZ(0);overflow:hidden}
+#reel{position:fixed;top:0;right:0;bottom:0;width:400px;z-index:2147483000;display:flex;flex-direction:column;box-sizing:border-box;
+  background:rgba(12,10,8,.94);color:#b8ab8e;border-left:1px solid #2a231b;font:15px/1.45 var(--fell,'IM Fell English',Georgia,serif);
   box-shadow:-18px 0 40px rgba(0,0,0,.55);transition:transform .25s ease;-webkit-user-select:none;user-select:none}
-#reel.away{transform:translateX(340px)}
+#reel.away{transform:translateX(400px)}
 #reel *{box-sizing:border-box}
 #reel .scroll{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;padding:0 14px 40px}
 #reel .scroll::-webkit-scrollbar{display:none;width:0;height:0}
 #reel header{padding:14px 14px 8px;border-bottom:1px solid #241e17}
-#reel h1{margin:0;font:400 20px/1 var(--print,'IM Fell English SC',Georgia,serif);letter-spacing:.12em;color:#d9cba8}
-#reel .build{margin:6px 0 0;font-size:11px;color:#7d725f;line-height:1.35}
-#reel .now{margin:6px 0 0;font-size:11px;color:#9c8f74;min-height:30px}
+#reel h1{margin:0;font:400 23px/1 var(--print,'IM Fell English SC',Georgia,serif);letter-spacing:.12em;color:#d9cba8}
+#reel .build{margin:6px 0 0;font-size:12.5px;color:#7d725f;line-height:1.35}
+#reel .now{margin:6px 0 0;font-size:12.5px;color:#9c8f74;min-height:30px}
 #reel .tab{position:absolute;left:-30px;top:12px;width:30px;height:64px;border:1px solid #2a231b;border-right:0;border-radius:4px 0 0 4px;background:rgba(12,10,8,.94);
-  color:#8e8269;font:400 11px var(--print,Georgia,serif);letter-spacing:.1em;writing-mode:vertical-rl;cursor:pointer;padding:0}
+  color:#8e8269;font:400 13px var(--print,Georgia,serif);letter-spacing:.1em;writing-mode:vertical-rl;cursor:pointer;padding:0}
 #reel button{font:inherit;color:#cdbf9e;background:#1b1611;border:1px solid #33291f;border-radius:3px;padding:4px 7px;cursor:pointer;line-height:1.2;text-align:left}
 #reel button:hover{background:#261e16;border-color:#4a3b2b;color:#e4d6b4}
 #reel button:active{background:#33281c}
 #reel button:disabled{opacity:.4;cursor:default}
 #reel button.on{border-color:#7a4a2a;color:#e7c9a0}
-#reel .start{display:block;width:100%;margin:12px 0 4px;padding:9px 10px;font:400 15px var(--print,Georgia,serif);letter-spacing:.1em;text-align:center;background:#2a1b10;border-color:#5a3a22;color:#e9d7b0}
+#reel .start{display:block;width:100%;margin:12px 0 4px;padding:10px 10px;font:400 17px var(--print,Georgia,serif);letter-spacing:.1em;text-align:center;background:#2a1b10;border-color:#5a3a22;color:#e9d7b0}
 #reel .ctl{display:grid;gap:7px;margin:10px 0 4px}
-#reel .ctl .lab{font-size:11px;color:#8a7e66;letter-spacing:.04em;margin-bottom:2px}
+#reel .ctl .lab{font-size:12.5px;color:#8a7e66;letter-spacing:.04em;margin-bottom:2px}
 #reel .btns{display:flex;flex-wrap:wrap;gap:4px}
-#reel .btns button{padding:3px 6px;font-size:12px}
+#reel .btns button{padding:4px 7px;font-size:13.5px}
 #reel details{border-top:1px solid #241e17;padding:2px 0}
-#reel summary{list-style:none;cursor:pointer;padding:9px 0 7px;font:400 14px var(--print,Georgia,serif);letter-spacing:.08em;color:#d2c3a0;display:flex;justify-content:space-between;align-items:baseline}
+#reel summary{list-style:none;cursor:pointer;padding:9px 0 7px;font:400 16px var(--print,Georgia,serif);letter-spacing:.08em;color:#d2c3a0;display:flex;justify-content:space-between;align-items:baseline}
 #reel summary::-webkit-details-marker{display:none}
-#reel summary .n{font:11px var(--fell,Georgia,serif);color:#7d725f;letter-spacing:0}
+#reel summary .n{font:12.5px var(--fell,Georgia,serif);color:#7d725f;letter-spacing:0}
 #reel details[open] summary{color:#e6d8b6}
-#reel .sub{margin:10px 0 4px;font-size:11px;color:#8a7e66;letter-spacing:.04em;font-style:italic}
+#reel .sub{margin:10px 0 4px;font-size:12.5px;color:#8a7e66;letter-spacing:.04em;font-style:italic}
 #reel .row{padding:6px 0 7px;border-bottom:1px solid #1d1813}
 #reel .row .top{display:flex;gap:6px;align-items:flex-start;justify-content:space-between}
 #reel .row .fire{flex:1;min-width:0}
 #reel .row .label{flex:1;min-width:0;color:#a89a7c;padding:4px 0}
-#reel .row .what{margin:3px 0 0;font-size:11.5px;color:#857a64;line-height:1.35}
-#reel .row .res{margin:2px 0 0;font-size:11px;color:#a5703e;min-height:0}
+#reel .row .what{margin:3px 0 0;font-size:13px;color:#857a64;line-height:1.35}
+#reel .row .res{margin:2px 0 0;font-size:12.5px;color:#a5703e;min-height:0}
 #reel .row.flash{background:rgba(120,60,20,.12)}
-#reel .chip{flex:none;font:10px/1 var(--fell,Georgia,serif);letter-spacing:.03em;padding:4px 5px;border-radius:2px;white-space:nowrap;margin-top:2px}
+#reel .chip{flex:none;font:11.5px/1 var(--fell,Georgia,serif);letter-spacing:.03em;padding:4px 5px;border-radius:2px;white-space:nowrap;margin-top:2px}
 #reel .c-live{color:#d49a62;border:1px solid #6b4426}
 #reel .c-made{color:#a99c80;border:1px dashed #4f4535}
 #reel .c-missing{color:#7f7563;border:1px solid #3a332a;text-decoration:line-through}
 #reel .c-idea{color:#7a705e;border:1px dotted #4a4234}
-#reel .tag{display:inline-block;margin-left:4px;font-size:10px;color:#c58a54;border:1px solid #5a3a22;border-radius:2px;padding:1px 4px}
+#reel .tag{display:inline-block;margin-left:4px;font-size:11.5px;color:#c58a54;border:1px solid #5a3a22;border-radius:2px;padding:1px 4px}
 #reel .tag.kept{color:#9fae7e;border-color:#46502f}
 #reel .tag.rejected,#reel .tag.off{color:#7f7563;border-color:#3a332a;text-decoration:line-through}
 #reel .sides{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px}
-#reel .sides button{padding:2px 6px;font-size:11.5px}
+#reel .sides button{padding:3px 7px;font-size:13px}
 #reel .takes{margin:5px 0 0 8px;display:grid;gap:3px}
-#reel .take{display:flex;gap:6px;align-items:center;font-size:11.5px;color:#9a8d72}
-#reel .take button{padding:1px 6px;font-size:11px}
+#reel .take{display:flex;gap:6px;align-items:center;font-size:13px;color:#9a8d72}
+#reel .take button{padding:2px 7px;font-size:12.5px}
 #reel .take .fn{flex:1;min-width:0;overflow-wrap:anywhere}
 #reel ol.ifthen{margin:4px 0 8px;padding:0;list-style:none;display:grid;gap:8px}
-#reel ol.ifthen li{font-size:12px;color:#a6997c;line-height:1.4}
+#reel ol.ifthen li{font-size:13.5px;color:#a6997c;line-height:1.4}
 #reel ol.ifthen b{font-weight:400;color:#dccdaa}
 #reel ol.ifthen a{color:#c98d57;text-decoration:none;border-bottom:1px dotted #6b4426;cursor:pointer}
-#reel .foot{margin:16px 0 0;font-size:11px;color:#6f6553}
+#reel .foot{margin:16px 0 0;font-size:12.5px;color:#6f6553}
 `;
     const st = document.createElement('style'); st.id = 'reelCss'; st.textContent = css; document.head.appendChild(st);
     const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
