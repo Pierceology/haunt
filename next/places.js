@@ -11,11 +11,12 @@
   const FARMHOUSE = {
     id: 'farmhouse', name: 'The Farmhouse', when: 'Tonight',
     caption: '1:13 AM', clockStart: '1:13 AM', table: 'a farmhouse table',
+    // (the walk-up is walk-up C from its half-second mark, Pierce 2026-10-10; the earlier take is exterior-land.mp4, still in the folder)
     art: { exterior: 'assets/places/farmhouse-exterior.jpg?v=9d21f78d84', exteriorPort: 'assets/places/farmhouse-exterior-port.jpg?v=a95be30410',
       // the walk up the drive (Flow, image to video, first frame = the still; played once, never looped, encoded without sound: the walk's own
       // sound is the game's, audio.js A.approach: no footsteps): files in assets/clips/farmhouse/. A file that is not there, or
       // is slow, gives the push-in still without a word.
-      exteriorClip: { land: 'exterior-land.mp4', port: 'exterior-port.mp4' }, thumb: 'assets/places/thumb-farmhouse.jpg?v=8f93fe68ae', plate: 'assets/places/farmhouse-plate.jpg?v=faaac2a480', plateHi: 'assets/places/farmhouse-plate-2x.jpg?v=b1a8c042c1', board: 'assets/places/farmhouse-board.jpg?v=efcffa0b28' },
+      exteriorClip: { land: 'walkup-C.mp4', port: 'exterior-port.mp4', start: 0.5 }, thumb: 'assets/places/thumb-farmhouse.jpg?v=8f93fe68ae', plate: 'assets/places/farmhouse-plate.jpg?v=faaac2a480', plateHi: 'assets/places/farmhouse-plate-2x.jpg?v=b1a8c042c1', board: 'assets/places/farmhouse-board.jpg?v=efcffa0b28' },
     candles: [{ x: 131, y: 76 }, { x: 1368, y: 146 }],
     // the live flames: wick (x, y), lean of the photographed flame (tilt, radians from up), length, and the spot
     // darkened on the wick. The photographed flames are painted out of the plate files, so hide only chars the wick.
@@ -54,9 +55,9 @@
     // The pencil line under the board (no cards): one suggestion at a time, in an old hand. Tapping it asks q. They are the player's
     // questions, never an answer: whatever is asked, the demon answers it.
     prompts: [
-      { note: 'ask what its name is', q: 'What is your name?' },
-      { note: 'ask how old it is', q: 'How old are you?' },
-      { note: 'ask how it died', q: 'How did you die?' },
+      { note: 'ask if anyone is here', q: 'Is anyone here?' },
+      { note: 'ask if it can see you', q: 'Can you see me?' },
+      { note: 'ask if it knows you', q: 'Do you know me?' },
       { note: "ask if it's alone", q: 'Are you alone?' },
       { note: 'ask where it is', q: 'Where are you?' },
       { note: 'ask what it wants', q: 'What do you want?' },

@@ -192,9 +192,9 @@
     add('troll:silent', { group: 'troll', label: 'If they go quiet', what: '45 s: a knock, left, both faces look at the box. 90 s: the piece moves to a letter by itself and waits. 180 s: the faces look round the room, a breath behind. No button: it runs on your own stillness', status: 'live', sub: 'At once, before the demon answers' });
 
     // ---------------------------------------------------------------- the taking and the ending (7, 8, 13.9)
-    add('ending:taking', { group: 'ending', label: 'The taking', what: 'the sun mourns, the silence cut, smoke, the thrum, the countdown embers, the board slides, NO to YES; about thirty seconds. After it the house is haunted', status: 'live', sub: 'The taking', fire: () => GB.possess('reel') });
+    add('ending:taking', { group: 'ending', label: 'The taking', what: 'the sun mourns, smoke, the thrum, the countdown embers, the board slides, NO to YES; about thirty seconds. After it the house is haunted', status: 'live', sub: 'The taking', fire: () => GB.possess('reel') });
     add('ending:bye-first', { group: 'ending', label: 'GOOD BYE: the first second and a half', what: 'both faces evil at once, the piece tugs toward NO, the picture jumps, a line from the pool lit under the board; let go after three seconds', status: 'live', sub: 'GOOD BYE',
-      async fire() { GB.bye.begin('reel'); await sleep(3000); GB.bye.end('reel'); return true; } });
+      async fire() { GB.S.sitAt -= 13 * 60 * 1000; GB.bye.begin('reel'); await sleep(3000); GB.bye.end('reel'); return true; } });
     add('ending:fight', { group: 'ending', label: 'The fight for GOOD BYE', what: 'it drags against you toward NO and off the board. Hold the piece on GOOD BYE with the mouse for four seconds to win; let go and it slams to NO, NO struck through', status: 'live', sub: 'GOOD BYE', fire: () => GB.struggle() });
     add('ending:fight-second', { group: 'ending', label: 'The second try', what: 'the second fight always wins: it barely pulls, a second and a half is enough, and nobody holding it, it goes to GOOD BYE by itself in twelve seconds. Then the won ending, to the title', status: 'live', sub: 'GOOD BYE',
       fire() { GB.S.goodbyeTries = Math.max(1, GB.S.goodbyeTries || 0); return GB.struggle(); } });
@@ -426,7 +426,7 @@ html.reel-side body{position:fixed!important;top:0!important;left:0!important;bo
     ctlRow('The dread', [0, 2, 4, 6, 8, 10].map((d) => [String(d), () => { GB.setDread(d); return 'dread ' + d; }]));
     ctlRow('The night', [
       ['The taking', () => { GB.possess('reel'); return 'the taking: about thirty seconds'; }, 'NO to YES, the smoke, the silence, the thrum'],
-      ['Hold GOOD BYE', async () => { GB.bye.begin('reel'); await sleep(3000); GB.bye.end('reel'); return 'held three seconds, let go'; }, 'after the taking: the evil faces, the tug, a line; before the taking the piece just slides off'],
+      ['Hold GOOD BYE', async () => { GB.S.sitAt -= 13 * 60 * 1000; GB.bye.begin('reel'); await sleep(3000); GB.bye.end('reel'); return 'held three seconds, let go (the night aged past minute twelve first: the fight is closed before that)'; }, 'after the taking: the evil faces, the tug, a line; before the taking the piece just slides off'],
       ['Left candle out', () => { GB.blowCandle(0, { dur: 700, dir: -1 }); return 'the left candle out (the sun\'s side)'; }],
       ['Right candle out', () => { GB.blowCandle(1, { dur: 700, dir: 1 }); return 'the right candle out (the moon\'s side)'; }],
       ['Relight', () => { GB.relightCandle(0); GB.relightCandle(1); GB.G.blackT = 0; return 'both lit'; }],
@@ -435,7 +435,7 @@ html.reel-side body{position:fixed!important;top:0!important;left:0!important;bo
     ctlRow('The clock, the sound, the picture', [
       ['The hour', () => { const h = new Date().getHours(); GB.clockTest(h); return 'the clock strikes ' + (h % 12 || 12); }, 'the strike for the hour it is now'],
       ['Midnight', () => { GB.clockTest(0); return 'twelve, then the bed drops out two seconds and comes back without the crickets'; }],
-      ['The thrum', () => { A.thrum('rise4'); return 'the thrum'; }], ['The silence', () => { A.silence(1500); return 'the silence cut'; }],
+      ['The thrum', () => { A.thrum('rise4'); return 'the thrum'; }], 
       ['The blink', () => { GB.blinkScreen('reel'); return 'does nothing now: the screen cut is out (Pierce, 2026-10-10)'; }], ['The shake', () => { GB.shake('slam'); return 'the shake: a slam, 5 px'; }],
     ]);
     scroll.append(ctl);
@@ -481,7 +481,7 @@ html.reel-side body{position:fixed!important;top:0!important;left:0!important;bo
       for (const sec of SECTIONS.concat(extra)) {
         const list = items.filter((i) => sec.groups.includes(i.group) && !(i.sub === 'take'));
         if (!list.length && sec.key !== 'table' && sec.key !== 'looks') continue;
-        const d = el('details'); d.dataset.sec = sec.key; d.open = store.get('open.' + sec.key, false);
+        const d = el('details'); d.dataset.sec = sec.key; d.open = store.get('open.' + sec.key, sec.key === 'table' || sec.key === 'looks');   // (the films open by default: Pierce, 2026-10-10, "a special effects preview")
         d.addEventListener('toggle', () => store.set('open.' + sec.key, d.open));
         const tally = {}; for (const i of items.filter((i) => sec.groups.includes(i.group))) { tally[i.status] = (tally[i.status] || 0) + 1; counts[i.status] = (counts[i.status] || 0) + 1; }
         const sum = el('summary'); sum.append(el('span', null, sec.title), el('span', 'n', Object.entries(tally).map(([s, n]) => n + ' ' + (CHIP[s] || s)).join(' · ') || 'nothing registered yet'));
@@ -507,6 +507,16 @@ html.reel-side body{position:fixed!important;top:0!important;left:0!important;bo
       else top.append(el('span', 'label', label));
       top.append(el('span', 'chip c-' + it.status, CHIP[it.status] || it.status));
       r.append(top);
+      // the film behind a prop or a look, as a plain link (Pierce, 2026-10-10: "where are all my other videos? ... i need to see these in action")
+      try {
+        const place = GB.place || {}, m = /^(prop|look):([^:]+)/.exec(it.name);
+        if (m) {
+          const files = [];
+          if (m[1] === 'prop' && place.props && place.props[m[2]] && place.props[m[2]].clip) files.push(['the take', place.props[m[2]].clip]);
+          if (m[1] === 'look' && place.looks && place.looks[m[2]]) { const L = place.looks[m[2]]; for (const [k, lab] of [['in', 'in'], ['hold', 'hold'], ['out', 'out'], ['clip', 'the take']]) if (L[k] && L[k].src) files.push([lab, L[k].src]); }
+          if (files.length) { const f = el('div', 'what'); f.append('film: '); files.forEach(([lab, src], i) => { const a = el('a', null, lab); a.href = (/^(assets\/|https?:)/.test(src) ? '' : 'assets/clips/' + (place.id || 'farmhouse') + '/') + src; a.target = '_blank'; a.rel = 'noopener'; a.style.color = '#c9a86a'; if (i) f.append(' · '); f.append(a); }); r.append(f); }
+        }
+      } catch (e) { /* no film to link */ }
       if (sides && it.can) {
         const s = el('div', 'sides');
         for (const w of sides) { const b = el('button', null, w); b.type = 'button'; b.dataset.fire = it.name; b.dataset.arg = w; b.addEventListener('click', () => fireItem(it.name, w, r)); s.append(b); }

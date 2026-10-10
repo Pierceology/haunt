@@ -1525,8 +1525,7 @@
     ARC.seq = { t0: G.t, i: 0, why, steps: [
       { at: 0, gaze: 'other', ms: 1100, plead: 0.3 },
       { at: 1100, gaze: 'you', ms: 1300, plead: 0.85, weep: true },
-      { at: 2400, gaze: 'letter', ms: 1500, plead: 0.5, glyph: 'GOODBYE' },
-      { at: 3900, end: true },
+      ...(byeOpen() ? [{ at: 2400, gaze: 'letter', ms: 1500, plead: 0.5, glyph: 'GOODBYE' }, { at: 3900, end: true }] : [{ at: 2400, end: true }]),   // (the glance at the exit only once the fight is open)
     ] };
     ARC.lastWarn = G.t; ARC.warns++;
     arcNote('warn', { why });
@@ -2000,7 +1999,7 @@
   function byeWatch(dt) {
     const gb = GLYPHS.GOODBYE, on = P.dragging && Math.abs(P.x - gb.x) < 170 && Math.abs(P.y - gb.y) < 60;
     if (!BYE.on) {
-      if (on && S.haunted && S.live && !S.busy && !S.possessing && !S.struggling && !S.awaitingYesNo && !S.ending && G.t >= BYE.cool) byeBegin('thumb');
+      if (on && byeOpen() && S.live && !S.busy && !S.possessing && !S.struggling && !S.awaitingYesNo && !S.ending && G.t >= BYE.cool) byeBegin('hand');   // (the fight only once it is open: minute twelve, the house in)
       return;
     }
     if (!S.started || halt || S.stopping || S.soft) { byeKill(); return; }
@@ -6760,7 +6759,7 @@
     // the production's own calls (DIRECTION.md 6): the thrum, the silence, the buzz and the blink in their hand, a picture on the table, a
     // cut to another room. A film the page has no file for draws nothing (playFilm, cutTo say so in the log); what was asked is recorded.
     if (r.thrum && A.thrum) { A.thrum(r.thrum); done.thrum = r.thrum; }
-    if (r.silence > 0 && A.silence) { A.silence(r.silence); done.silence = r.silence; }
+    if (r.silence > 0) nlog('silence', { ms: r.silence, off: true });   // (the room never goes silent: Pierce, 2026-10-10)
     if (r.buzz) { buzz(r.buzz.split(',').map(Number)); done.buzz = r.buzz; }
     if (r.blink) { blinkNow(); done.blink = true; NIGHT.blinks++; }   // (the demon's blink counts toward the haunted phase's two)
     if (r.clip) { done.clip = r.clip; playFilm(r.clip); }
@@ -8390,7 +8389,7 @@
     const onGB = P.dragging && Math.abs(P.x - GLYPHS.GOODBYE.x) < 170 && Math.abs(P.y - GLYPHS.GOODBYE.y) < 60;
     if (onGB && !S.busy && !S.possessing && !S.struggling && !S.awaitingYesNo) {
       DR.gb += dt;
-      if (S.haunted) {
+      if (byeOpen()) {
         GLYPHS.GOODBYE.glow = Math.max(GLYPHS.GOODBYE.glow, Math.min(1, DR.gb));
         if (DR.gb > 0.05) askEnding('won');   // its last words are asked for the moment the thumb lands (the fight's)
         if (DR.gb > 0.4) { DR.gb = 0; goodbyeStruggle(); return; }   // (the tick before half a second: the pulls begin at about 600 ms, DIRECTION.md 13.9)
@@ -8583,7 +8582,7 @@
     lookToward('left', Math.max(1400, k.last));
     if (due.special === 'three') S.dread = Math.max(S.dread, 5);
     // midnight: after the twelfth, the bed drops out for two seconds, and comes back without the crickets
-    if (due.special === 'midnight') clockLater(k.last + 1700, () => { if (A.silence) A.silence(2000); if (A.noCrickets) A.noCrickets(true); nlog('clock', { h: 0, did: 'silence' }); });
+    if (due.special === 'midnight') clockLater(k.last + 1700, () => { if (A.noCrickets) A.noCrickets(true); nlog('clock', { h: 0, did: 'crickets' }); });   // (no drop-out: the room never goes silent, 2026-10-10)
     // (for a picture that goes with the hour, the watch: it listens for this)
     try { dispatchEvent(new CustomEvent('goodbye:clock', { detail: { h: due.h24, n: due.n, special: due.special, count: k.count, level } })); } catch (e) { /* no listener */ }
     return clockRec(r);
@@ -8773,7 +8772,7 @@
     if (!S.started || S.awaitingYesNo || S.struggling || S.possessing || S.ending || S.stopping) { noteEl.hidden = true; noteKey = ''; qb.placeholder = 'Ask it something'; return; }
     let text = '', q = '';
     if (S.offNote && !S.soft) { text = S.offNote; q = ''; }
-    else if (S.soft || S.haunted || S.cleared) { text = S.haunted && S.goodbyeTries > 0 ? BYE_LOST_NOTE : 'say goodbye'; q = 'Goodbye'; }
+    else if (S.soft || S.cleared || byeOpen()) { text = S.haunted && S.goodbyeTries > 0 ? BYE_LOST_NOTE : 'say goodbye'; q = 'Goodbye'; }
     else if (!S.asked) { text = 'ask it something'; q = firstQ(); }
     else { const p = nextPrompt(); if (p) { text = p.note; q = p.q; } }
     const key = text + '|' + q;
@@ -10092,6 +10091,11 @@
     if (/^[A-Z]$/.test(letter)) { store.set('kept', { at: Date.now(), letter, won: true }); nlog('kept', { letter, won: true }); }
     await endingTail({ won: true, held: got, letter });
   }
+  // The fight for GOOD BYE opens late (Pierce, 2026-10-10: "the whole hold goodbye isn't a great idea until closer to the end"): once the house
+  // is in AND the night is past its twelfth minute. Before that a hold slides the piece off and nothing ends; the pencil never says "say
+  // goodbye" and the sun never glances at the exit. The candle is the way out at every moment.
+  const BYE_OPENS_S = 12 * 60;
+  function byeOpen() { return S.haunted && nightSecs() >= BYE_OPENS_S; }
   // The ending's line: the move asked for at the thumb (WON, why 'won' or 'bye'), performed the instant it is in; asked now if it never was.
   // Within eight seconds of this moment, or not at all (wonNoLine): the page never invents words. Returns what was said ('' for nothing),
   // or null when the night ended inside it. held: what perform held back for the tail (the voice, the record, the sound it played).
@@ -10884,7 +10888,7 @@
     // (Pierce, 2026-10-05, on his phone: "the video didnt ... play the house video") An iPhone does not load a film's frames until it
     // is asked to play, so waiting for it to be ready meant the still every time. The film is always asked to play: the still shows
     // until its first frame is up, then the film takes over and runs to its end.
-    const film = !!(vid && vid.getAttribute('src'));
+    const film = !!(vid && vid.getAttribute('src')), c = PL && PL.art && PL.art.exteriorClip;
     el.hidden = false; el.classList.remove('out', 'clip'); void el.offsetWidth; el.classList.add('in');
     const t0 = performance.now();
     let rolling = false;
@@ -10922,7 +10926,7 @@
         };
         vid.addEventListener('playing', roll, { once: true });
         vid.addEventListener('ended', finish, { once: true });
-        try { vid.currentTime = 0; } catch (e) { /* from the start anyway */ }
+        try { vid.currentTime = (c && +c.start) || 0; } catch (e) { /* from the start anyway */ }   // (places.js exteriorClip.start: the film begins there, no re-cut)
         vid.loop = false; vid.muted = true; vid.playsInline = true;
         const pl = vid.play();
         // a browser that will not play a film (low power mode, say): the still, pushed in, as it was before there was a film
