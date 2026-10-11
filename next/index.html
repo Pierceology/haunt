@@ -82,6 +82,7 @@ body.daylight #tref { color: rgba(255,246,226,.9); text-shadow: 0 1px 3px rgba(0
 /* ---------- bottom: the pencil note on the wood, and the question box ---------- */
 #dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 6px 16px calc(env(safe-area-inset-bottom, 0px) + 14px); display: grid; gap: 8px; justify-items: center; background: linear-gradient(to top, rgba(7,6,8,.8), rgba(7,6,8,0)); opacity: 0; transform: translateY(16px); transition: opacity .8s, transform .8s; pointer-events: none; }
 body.playing #dock { opacity: 1; transform: none; pointer-events: auto; }
+body.playing:not(.opened) #dock { opacity: 0; pointer-events: none; }   /* nothing to type into until the board has made its first move (2026-10-10) */
 /* one line in pencil, in the ghost's hand, written on the wood; tapping it asks it */
 #note { background: none; border: 0; padding: 8px 12px; min-height: 44px; max-width: min(560px, 100%); font-family: var(--hand); font-size: clamp(21px, 2.3vw, 26px); line-height: 1.15; color: rgba(205,196,178,.78); text-shadow: 0 1px 0 rgba(0,0,0,.6), 0 0 14px rgba(0,0,0,.7); transform: rotate(-1.2deg); cursor: pointer; transition: color .8s, text-shadow .8s, opacity .4s; text-align: center; }
 #note:hover { color: rgba(233,224,204,.92); }
@@ -608,10 +609,10 @@ html.gated #gate { position: fixed; inset: 0; z-index: 70; display: grid; place-
   sync();
 })();
 </script>
-<script>/* ?reel (Pierce's review page) loads reel.js here, before the game: without ?reel nothing of it is fetched */ if (/[?&]reel\b/.test(location.search)) document.write('<script src="reel.js?v=c817607a4f"><\/script>');</script>
+<script>/* ?reel (Pierce's review page) loads reel.js here, before the game: without ?reel nothing of it is fetched */ if (/[?&]reel\b/.test(location.search)) document.write('<script src="reel.js?v=418de72e9b"><\/script>');</script>
 <script src="audio.js?v=9bd096e647"></script>
 <script src="places.js?v=433bdbef4b"></script>
-<script src="game.js?v=96358de687"></script>
+<script src="game.js?v=6a589686be"></script>
 <script src="fullscreen.js?v=2b83fee90c"></script>
 </body>
 </html>

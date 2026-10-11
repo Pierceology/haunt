@@ -668,7 +668,7 @@
     friendAsked: false, muted: false,
     awaitingYesNo: null, vs: false, started: false,
     // the dread engine
-    live: false, dread: 0, haunted: false, possessing: false, struggling: false, calming: false, won: false,
+    live: false, opened: false, dread: 0, haunted: false, possessing: false, struggling: false, calming: false, won: false,
     chosen: '', history: [], offNote: '',
     dare: false, sitAt: 0, firstAnswerAt: 0, invite: '',
   };
@@ -2618,7 +2618,11 @@
   // Pierce, 2026-10-08, after playing it: "the scratches and different colors didn't land well. red embers are the best." Both are switched off
   // here, not removed (one flag each, so a test or a later night can bring them back): no gouges on the board, and the embers, the trail and the
   // faces' glow stay warm whatever the demon asks. The warm embers, the trail, the burns on the letters and the faces are what he likes.
-  const FXFLAGS = { scratches: false, colours: false };
+  // Pierce, 2026-10-10, playing the stripped night: "lose the fairy dust following things ... keep red hot claw marks", "lose all embers
+  // anyhow that aren't red", "lose all the water from left and right", "lose all things not related to the table period". So: the gouges are
+  // back (red only), the trail behind the piece is gone, no stain is ever laid, and the camera never leaves the table (the rooms, the
+  // cutaways, the ceiling and the abacus stay in the reel to watch, marked made not wired).
+  const FXFLAGS = { scratches: true, colours: false, trail: false, stains: false, looks: false };
   const FXE = {
     scratches: [], parts: [], trailAcc: 0, psx: 0, psy: 0, skew: 0, angerUntil: 0, trailed: 0,
     nLong: 0, nShort: 0, lastShort: -Infinity, lastCrack: -Infinity, nStains: 0, nId: 0, nCrack: 0, vx: 0, vy: 0, log: [],
@@ -2731,6 +2735,7 @@
   function fxTrailTick(dt) {
     const sx = P.sx, sy = P.sy, vx = (sx - FXE.psx) / Math.max(dt, 0.001), vy = (sy - FXE.psy) / Math.max(dt, 0.001);
     FXE.psx = sx; FXE.psy = sy; FXE.vx = vx; FXE.vy = vy;
+    if (!FXFLAGS.trail) { FXE.trailAcc = 0; return; }   // the fairy dust (Pierce, 10-10): off
     if (!fxOK() || fxCalm() || P.snap || P.silent) return;
     const sp = P.speed;
     if (!(sp > 60)) { FXE.trailAcc = 0; return; }
@@ -3004,7 +3009,8 @@
       c.save(); c.translate(g.x, g.y); c.rotate(g.rot);
       c.lineCap = 'round'; c.lineJoin = 'round';
       if (cr.phase === 'ash' || cr.phase === 'scar') {
-        const kk = cr.phase === 'scar' ? 1 : sstep((u - 0.4) / 1.1), sep = 2.4 * kk, lift = -3.2 * kk, a = 1 - 0.62 * kk, sc = 1 + 0.045 * kk;
+        // the halves used to draw apart and lift; Pierce, 10-10: "don't make the letters move". They stay put and ash in place.
+        const kk = cr.phase === 'scar' ? 1 : sstep((u - 0.4) / 1.1), sep = 0, lift = 0, a = 1 - 0.62 * kk, sc = 1;
         c.font = cr.font; c.textAlign = 'center'; c.textBaseline = 'middle';
         for (const side of [-1, 1]) {
           c.save();
@@ -3065,7 +3071,7 @@
     return set;
   }
   function fxStain(place, o = {}) {
-    if (!fxOK() || !STAIN_SPEC[place || 'glass']) return null;
+    if (!FXFLAGS.stains || !fxOK() || !STAIN_SPEC[place || 'glass']) return null;   // no water on the board (Pierce, 10-10)
     place = place || 'glass';
     if (STAINS.length >= FXB.stains) { STAINS.shift(); baseDirty = true; }
     const sp = STAIN_SPEC[place](), seed = (Math.random() * 1e6) | 0, arr = new Float32Array(SW * SH), dry = new Float32Array(SW * SH), dn = new Float32Array(SW * SH);
@@ -6775,8 +6781,8 @@
     if (r.clip) { done.clip = r.clip; playFilm(r.clip); }
     if (r.cut) { done.cut = r.cut; cutTo(r.cut); }
     if (r.prop) { done.prop = r.prop; propPlay(r.prop); }           // a thing on the table misbehaves (the props package)
-    if (r.look) { done.look = r.look; lookAt(r.look); }              // the camera turns, a room, the ceiling, a cutaway (the looks package)
-    if (r.count > 0) { done.count = r.count; countBeads(r.count); }  // the abacus (the looks package)
+    if (r.look && FXFLAGS.looks) { done.look = r.look; lookAt(r.look); }              // the camera turns, a room, the ceiling, a cutaway (the looks package)
+    if (r.count > 0 && FXFLAGS.looks) { done.count = r.count; countBeads(r.count); }  // the abacus (the looks package)
     fxPerform(r, done, o);   // the marks, drawn on the board and the faces: a gouge, a split letter, a stain, a burn (fx section; nothing is filmed)
     if (sounding.length) await Promise.all(sounding);   // (a sound the sun looked ahead of is played before the move is over)
     const said = line.join(' · ');
@@ -8088,6 +8094,7 @@
       else if (G.t >= LK.keysAt) { microKeys(MICRO_RIGHT, 0.4); LK.keysAt = G.t + rnd(50000, 110000); nlog('event', { name: 'micro-keys' }); }
     }
     if (!free || nightSecs() < OPENING_END || G.t - DR.lastHouseAt < HOUSE_GAP || DR.running) return;
+    if (!FXFLAGS.looks) return;   // the camera never leaves the table (Pierce, 10-10); the house sounds above still play
     if (S.haunted && !LK.lookedUp) {
       if (!LK.upAt) LK.upAt = G.t + rnd(20000, 60000);
       else if (G.t >= LK.upAt) { DR.lastHouseAt = G.t; lookedUp(); return; }
@@ -8109,7 +8116,8 @@
   LK_UNCALLED.forEach((k) => HOUSE_KEYS.add('look-' + k));
   // ---- the reel: every room, cutaway and part of the ceiling, and honestly what was never filmed
   {
-    const add = (name, group, what, status, fire) => REEL.add(name, { group, what, status, fire });
+    // off the night since 2026-10-10 ("lose all things not related to the table period"): every live look is shown as made not wired, still watchable here
+    const add = (name, group, what, status, fire) => REEL.add(name, { group, what: status === 'live' && !FXFLAGS.looks ? 'OFF THE NIGHT (Pierce, 10-10: the table only). ' + what : what, status: status === 'live' && !FXFLAGS.looks ? 'made' : status, fire });
     add('look:clock', 'look', 'Right, the dining room: the cat clock on floral wallpaper at your real time, eyes and tail swinging, slowing, stopping dead centre on the last tick; back at the table the wall clock ticks late', 'live', () => looksLookAt('clock'));
     add('look:right', 'look', 'look right: the cat clock (L-LOOK-RIGHT, the plain turn, was never made)', 'live', () => looksLookAt('right'));
     add('look:micro', 'look', 'Further right, the kitchen doorway: the microwave heard first (keys from the right), its green display at your time, the cycle, resting on 6:66, the long tone, the beeps after', 'live', () => looksLookAt('micro'));
@@ -8774,6 +8782,7 @@
     if (!noteEl) return;
     const qb = $('#q');
     qb.disabled = false;   // never locked: a question sent while the board is busy waits its turn
+    if (S.started && !S.opened) { noteEl.hidden = true; noteKey = ''; return; }   // nothing until the board has made its first move (Pierce, 10-10)
     if (S.penHint && S.started && (S.awaitingYesNo || S.struggling) && !S.possessing && !S.ending && !S.stopping) {
       // the one instruction, in pencil: it asks nothing when touched
       qb.placeholder = 'Ask it something'; noteEl.hidden = false; noteEl.dataset.q = ''; noteEl.classList.remove('erasing', 'red', 'writing');
@@ -10414,7 +10423,7 @@
     Object.assign(P, { path: null, mode: 'free', x: REST.x, y: REST.y, tx: REST.x, ty: REST.y, vx: 0, vy: 0, handDX: 0, handDY: 0, ymax: 340, tremble: null, snap: true });
     keptPlace();   // a night they lost: the board has already moved
     // the dread engine, back to nothing
-    Object.assign(S, { dread: 0, haunted: false, possessing: false, struggling: false, calming: false, ending: false, won: false, chosen: '', live: false, calmBreak: null, history: [] });
+    Object.assign(S, { dread: 0, haunted: false, possessing: false, struggling: false, calming: false, ending: false, won: false, chosen: '', live: false, opened: false, calmBreak: null, history: [] });
     WON = null;
     Object.assign(S, { soft: false, stopping: '', griefUntil: 0, goodbyeTries: 0, askedToLeave: false, offNote: '' });
     Object.assign(G, { black: 0, blackT: 0, pglow: 0, pglowT: 0, blinkUntil: 0, leanTo: false, steady: false, hauntLean: false, boardDy: 0 });
@@ -10516,7 +10525,7 @@
     resetScene();
     S.started = false; S.busy = false; S.phase = 'intro';
     renderNote();
-    document.body.classList.remove('playing', 'night');   // the HUD (the full-screen button) comes back with the title
+    document.body.classList.remove('playing', 'night', 'opened');   // the HUD (the full-screen button) comes back with the title
     $('#hud').classList.remove('dim'); uiDark = 0; document.body.classList.remove('blackout');
     G.intro = 1;
     // a night that was stopped (the candle, real fear, real distress) leaves no "It's still here."; nor does a night they won, or one that
@@ -10561,7 +10570,7 @@
         saveProg(); renderPlaces(); syncStill(); return true;
       }
       S.busy = true; if (noteEl) noteEl.hidden = true;   // the last place's note leaves with it
-      document.body.classList.remove('playing');
+      document.body.classList.remove('playing', 'opened');
       $('#hud').classList.add('dim');
       const from = G.intro;
       await animate(900, (k) => { G.intro = Math.max(from, k); });
@@ -10609,6 +10618,9 @@
       await moveTo(P.x + 18, P.y + 12, { dur: 600, dwell: 100 });
       P.tx = P.x; P.ty = P.y;
     }
+    // Pierce, 2026-10-10: "it shouldn't show ask it something until it's all set, then the board asks the user who is here". The box and
+    // the pencil line stay out of sight until the first move has landed; the first move (why 'start', at the site) asks who is here.
+    S.opened = true; document.body.classList.add('opened'); renderNote();
     lastInput = G.t; S.live = true;
     // ?take: a preview of the taking for Pierce (the embers, the thrash, the drag onto YES) a few seconds after the table is up; the night
     // goes on from there as a taken night
