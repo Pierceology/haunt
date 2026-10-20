@@ -410,16 +410,17 @@ html.gated #gate { position: fixed; inset: 0; z-index: 70; display: grid; place-
 #gateSend:hover { background: #2a1d10; }
 </style>
 <script>
-// DESKTOP ONLY (Pierce, 2026-10-08). A phone (a touch screen with nothing to hover with) or a window narrower than 900 px, loaded without ?debug,
-// gets the page below and not the game: window.GOODBYE_GATE.on is true, html.gated hides everything but #gate, and audio.js, game.js and
-// fullscreen.js start nothing. The window grows wide enough (and is not a touch screen): the script after the gate loads them, and it is the
-// game. ?debug (the tests' page) skips all of it.
+// THE GATE. Phones and tablets play (Pierce, 2026-10-19: "We need demo and the real game to both work"; the desktop-only page of
+// 2026-10-08 is over). What is still gated: a laptop window narrower than 900 px, loaded without ?debug, gets the page below and not
+// the game: window.GOODBYE_GATE.on is true, html.gated hides everything but #gate, and audio.js, game.js and fullscreen.js start
+// nothing. The window grows wide enough: the script after the gate loads them, and it is the game. A touch screen (a phone, a tablet)
+// is never gated, whatever its width: the game lays itself out upright for it. ?debug (the tests' page) skips all of it.
 (function () {
   var debug = /[?&]debug\b/.test(location.search);
   function why() {
     var touch = false;
     try { touch = matchMedia('(pointer: coarse)').matches && matchMedia('(hover: none)').matches; } catch (e) { /* no media queries */ }
-    return touch ? 'touch' : window.innerWidth < 900 ? 'narrow' : '';
+    return touch ? '' : window.innerWidth < 900 ? 'narrow' : '';
   }
   var G = window.GOODBYE_GATE = { on: false, debug: debug, why: debug ? '' : why(), test: why, min: 900 };
   G.on = !!G.why;
@@ -460,8 +461,8 @@ html.gated #gate { position: fixed; inset: 0; z-index: 70; display: grid; place-
   <div class="gate-in">
     <h1 id="gateH">GOOD BYE</h1>
     <div class="index">
-      <p>This one is for a laptop in a dark room. Wear headphones.</p>
-      <p>It won't start on a phone or a tablet. Open this same address on your laptop.</p>
+      <p>This one wants the whole screen. Make this window wider, or open the same address on your phone.</p>
+      <p>A dark room. Headphones.</p>
       <p class="addr" id="gateAddr"></p>
       <button type="button" id="gateSend">Send myself the link</button>
       <p class="said" id="gateSaid" role="status" aria-live="polite"></p>
