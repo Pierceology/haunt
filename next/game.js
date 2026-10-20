@@ -8445,6 +8445,9 @@
     if (!S.haunted && since < OPENING_END) return;   // nothing else of the engine's runs until 3:00
     if (G.t - DR.lastHouseAt < HOUSE_GAP) return;     // no two house events within thirty seconds of each other
     if (now < DR.next) return;
+    // nothing of the house's starts while they are typing: it waits for them to send or stop (Pierce, 2026-10-20: "it still moves the
+    // planchette when I am typing!!!!")
+    if (composing()) return;
     const name = chooseEvent();
     if (name) runEvent(name); else { ambientSound(); scheduleNext(false); }
   }
