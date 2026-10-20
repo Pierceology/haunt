@@ -6033,11 +6033,12 @@
     markSaid(t); NIGHT.spelledLines.push(t);
     const cut = () => S.cut && S.unprompted;
     const hostile = !!o.hostile, fast = !!o.fast, dw = o.dw || 1;
-    const pace = o.pace ?? (fast ? 0.07 : hostile ? 0.45 : 0.95 / SPELL_SPEED);
+    // (hostile is divided by SPELL_SPEED like a plain line, 2026-10-19: the 10-08 speed-up had left a violent line slower than a normal one)
+    const pace = o.pace ?? (fast ? 0.07 : (hostile ? 0.45 : 0.95) / SPELL_SPEED);
     const base = fast ? 60 : Math.round(300 / SPELL_SPEED);
-    const dwellOf = () => Math.round((o.dwell ?? (fast ? 24 : hostile ? rnd(120, 220) : rnd(380, 700) / SPELL_SPEED)) * dw);
+    const dwellOf = () => Math.round((o.dwell ?? (fast ? 24 : (hostile ? rnd(120, 220) : rnd(380, 700)) / SPELL_SPEED)) * dw);
     // about what one letter takes, travel and rest (a hop of 250 units), for how long the faces hold a look
-    const perEst = base + 250 * pace + (fast ? 24 : hostile ? 170 : 540 / SPELL_SPEED) * dw;
+    const perEst = base + 250 * pace + (fast ? 24 : (hostile ? 170 : 540) / SPELL_SPEED) * dw;
     const fit = o.fit ?? t.length;
     ta.dataset.len = fit > 26 ? 'long' : fit > 16 ? 'mid' : '';
     const land = (g) => { commit(g, hostile, fast); if (o.char && !hostile) scorch(g, true); };
@@ -6353,8 +6354,12 @@
   // typing, a beat behind them, without a sound, and stops dead when they stop. Six a night at most, from two replies in and forty seconds
   // at the table, never while the board is busy, in the possession or the struggle, thirty-five seconds apart; about one typing burst in
   // two that may (2026-10-05: the page's tricks come often now). The next turn tells the demon it happened (did 'read'), and its ledger counts it.
+  // Nothing moves while they type (Pierce, 2026-10-19: "when a user types it sometimes makes the planchette move and I don't like that"):
+  // the read-along, the move made ready that came in a pause (hesitate) and the answer to a half-typed line (unfinished) are all off.
+  // The code stays; TYPING_MOVES brings any of them back.
+  const TYPING_MOVES = false;
   const READ = {
-    on: false, n: 0, last: -Infinity, queue: [], iv: 0, stopT: 0, prev: '', chance: 0.55,
+    on: false, n: 0, last: -Infinity, queue: [], iv: 0, stopT: 0, prev: '', chance: TYPING_MOVES ? 0.55 : 0,
     due() {
       const replies = NIGHT.turns.filter((t) => t.r).length;
       return S.started && S.live && !S.busy && !S.queue.length && !S.possessing && !S.struggling && !S.soft && !S.ending && !S.stopping && !halt && !deadNow()
@@ -6585,8 +6590,10 @@
       asks: r.asks || 'none', callout: !!r.callout, uses_erased: r.uses_erased || 'none', clip: '', cut: '', buzz: '', blink: false, thrum: '', silence: 0,
       scratch: { corner: '', direction: '' }, ember: '', crack: '', stain: '', burn: '' };
     // the first build's motion for what lands (spell, YES, NO, GOOD BYE, a letter alone): the travel hostile when violent, the rests by PACE
-    const landPace = violent ? 0.45 : 0.95 / SPELL_SPEED, landBase = violent ? 300 : Math.round(300 / SPELL_SPEED);
-    const restOf = () => Math.round((violent ? rnd(120, 220) : rnd(380, 700) / SPELL_SPEED) * K.dw);
+    // (violent is divided by SPELL_SPEED like the rest, 2026-10-19: the 10-08 speed-up left it travelling slower than a normal move, so
+    //  a slow line and a violent one came out much the same; violent is the quickest pace, the slam is what makes it hard)
+    const landPace = (violent ? 0.45 : 0.95) / SPELL_SPEED, landBase = Math.round((violent ? 300 : 300) / SPELL_SPEED);
+    const restOf = () => Math.round((violent ? rnd(120, 220) : rnd(380, 700)) / SPELL_SPEED * K.dw);
     const line = [];   // the line under the board: what it spelled and what it landed on, a run of single marks as one word
     let word = '', pieces = 0, glue = false, glued = false;
     // a run of letters right after the spelled line, with only sounds between, is one line with it (the line, the breath, then the
@@ -6696,7 +6703,7 @@
         case 'letter': case 'number': {
           const g = GLYPHS[m.mark]; if (!g) continue;
           // (a run of single letters is a word landed at the first build's weight: the travel and the rest of a spelled letter)
-          const per = landBase + 250 * landPace + (violent ? 170 : 540) * K.dw;
+          const per = landBase + 250 * landPace + (violent ? 170 : 540) / SPELL_SPEED * K.dw;
           if (!word) { await piece(); const run = runAt(i); if (run && isYou(run.w)) eyesOnYou(1200 + run.w.length * per); }
           if (m.mark === lastMark) { const go = circleOn(g, 900, 18); atLand.forEach((x) => playMoveSound(x, true)); await go; }
           else await landOn(g.x, g.y, { pace: landPace, base: landBase, dwell: m.ms || restOf() }, atLand);
@@ -10722,6 +10729,7 @@
     return G.t - lastInput >= UNF.after - 100;
   }
   async function unfinishedNow(force) {
+    if (!TYPING_MOVES) return;
     const box = $('#q'), v = box ? box.value.trim() : '';
     if (!unfinishedDue(v) || (!force && Math.random() >= UNF.chance)) return;
     NIGHT.unfinished++; NIGHT.lastUnfinished = G.t;
@@ -10733,6 +10741,7 @@
   // happens then, at once (why 'hesitate'), if there is one.
   const HESITATE = { timer: 0, after: 4500 };
   function hesitateNow() {
+    if (!TYPING_MOVES) return;
     const box = $('#q'), v = box ? box.value.trim() : '';
     if (!v || !READY.fresh() || S.busy || S.queue.length || S.awaitingYesNo || deadNow() || pewOpen || G.t - lastInput < HESITATE.after - 200) return;
     if (soundsLikeDistress(v) || soundsAfraid(v, NAMES) || draft.hot) return;

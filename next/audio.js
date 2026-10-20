@@ -762,7 +762,7 @@
       // pondering (every move); the first take of each sound the house and the taking use early (a knock, a creak, the floor, the latch,
       // the frame, a breath, the slam, the snuff); then everything else. The early ones go six at a time; the rest two at a time, so the
       // films and the flames are never starved while the night begins. A kind's first take comes before any kind's second.
-      const FIRST = ['match', 'ponder', 'knock', 'creak', 'floor', 'latch', 'house', 'breath', 'slam', 'snuff', 'knocks', 'steps', 'whisper', 'shh', 'near', 'gasp', 'drag', 'rattle', 'walls'];   // (walls: the television on the way up the drive, A.approach)
+      const FIRST = ['match', 'ponder', 'knock', 'creak', 'floor', 'latch', 'house', 'breath', 'slam', 'snuff', 'knocks', 'steps', 'whisper', 'shh', 'near', 'gasp', 'drag', 'rattle', 'walls'];   // (walls: the television on the way up the drive, A.approach)   // (walls: the television on the way up the drive, A.approach)
       const rank = (k) => { const i = FIRST.indexOf(k); return i < 0 ? FIRST.length : i; };
       const nth = {};
       for (const j of jobs) { nth[j[0]] = (nth[j[0]] || 0) + 1; j.push(nth[j[0]]); }
