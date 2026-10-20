@@ -8354,7 +8354,7 @@
     return true;
   }
   setInterval(() => {
-    if (!S.queue.length || S.busy || !S.started || S.possessing || S.struggling || S.ending || deadNow()) return;
+    if (!S.queue.length || S.busy || !S.started || !S.opened || S.possessing || S.struggling || S.ending || deadNow()) return;
     const x = S.queue.shift(); renderQueue();
     ask(x.q, x.own);
   }, 150);
@@ -9448,17 +9448,25 @@
     // in the calm, any question breaks it
     if (S.calming) { if (S.calmBreak) S.calmBreak(); return; }
     if (!q || pewOpen) { if (!q && own && !pewOpen) trollEmpty(); return; }   // (a bare send: nothing is sent; the piece gives one small tremble)
-    // the board is busy: the question waits its turn, in order (a wish to stop and the margin's question go to the front)
+    // the board is busy: the question waits its turn, in order (a wish to stop and the margin's question go to the front). So does a line
+    // sent before the first move has landed (the walk up the drive, the candles): the night of 2026-10-20 took "Pierce" then, answered it
+    // against an empty night, threw the first move away and asked who was there again. It waits in the line and is answered right after.
     const urgent = outright(q);
-    if (S.busy || deadNow()) { if (!S.ending) enqueue(q, own, urgent); return; }
+    if (S.busy || deadNow() || (S.started && !S.opened)) { if (!S.ending) enqueue(q, own, urgent); return; }
     typed.armed = false; lastInput = G.t; S.cut = false;
     READY.drop('they sent a line'); READ.stop();
     S.busy = true; NIGHT.usedNotes.add(q.toLowerCase()); renderNote();
     showQuestion(q);
     const stop = wantsToStop(q), family = askedForFamily(q);
     // a name somebody gave in their own words, read only now that the safety checks have passed it (never from a wish to stop or a
-    // question for family). The demon reads it in what they typed; the board may spell it once a night.
-    if (own && !stop && !family && !forbiddenAsk(q)) { const vn = volunteeredName(q, false); if (vn) takeName(vn, 'said'); }
+    // question for family). The demon reads it in what they typed; the board may spell it once a night. A bare name is one too when it
+    // answers the demon's question and nobody is seated yet: the first move asks who is here, and "Pierce" alone is the answer (the site
+    // then knows who is typing, and never reads their own name as someone in their life).
+    if (own && !stop && !family && !forbiddenAsk(q)) {
+      const lastT = NIGHT.turns[NIGHT.turns.length - 1], asked = !!(lastT && lastT.r && (lastT.r.asks === 'answer' || lastT.r.asks === 'choose'));
+      const vn = volunteeredName(q, asked && !NAMES.length);
+      if (vn) takeName(vn, 'said');
+    }
     // a question about whether it can see them: both faces look straight at them
     if (/\b(see me|see us|watching|look at me|see you|see my)\b/i.test(q)) eyesOnYou(7000);
     // a wish to stop: GOOD BYE glows, and saying it (or holding it there) works; the demon is told, and answers in its own way
@@ -9492,7 +9500,8 @@
     // drive and the candles), so it lands the moment the table is up
     const pre = o.pre && o.pre.night === nightNo && o.pre.why === o.why ? o.pre
       : !q && o.why && PREFETCH.start && PREFETCH.start.why === o.why && PREFETCH.start.night === nightNo ? PREFETCH.start : null;
-    PREFETCH.start = null;
+    // (only the move that used it clears it: a typed line answered first used to throw the paid first move away, 2026-10-20)
+    if (pre && pre === PREFETCH.start) PREFETCH.start = null;
     const turn = pre ? pre.turn : newTurn(q, o);
     READY.drop('a move');   // a move made ready before this one is stale now
     ponderStart();
@@ -10696,7 +10705,7 @@
     // and both faces glance at the box. (A long run of marks, ;;;;;;;;, is a mashed keyboard and is sent as one.)
     if (S.started && S.live && !S.ending && !S.soft && !S.stopping && (!v || (!hasContent(v) && !mashy(v)))) { q.value = ''; trollEmpty(); return; }
     if (v && S.started && !S.ending) trollSent(v);   // (the rate: five lines inside ten seconds)
-    if (v && !S.ending && (S.busy || S.possessing || S.struggling || (deadNow() && !outright(v)))) {
+    if (v && !S.ending && (S.busy || S.possessing || S.struggling || (S.started && !S.opened) || (deadNow() && !outright(v)))) {
       if (!enqueue(v, true, outright(v))) { q.classList.add('full'); setTimeout(() => q.classList.remove('full'), 400); trollQueueFull(); return; }
       q.value = ''; q.blur();
       giveWay();
@@ -11004,6 +11013,9 @@
   // The page never decides a price: it shows the site's labels and amounts, and only links that go to the site's checkout.
   const HAUNT_RE = /^https:\/\/www\.jnoirbranding\.com\/haunt\?i=[A-Za-z0-9_-]{4,64}&k=[a-f0-9]{48}&p=[a-z0-9]{1,16}$/;
   const NUMW = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+  // The moment a link stops working, in the sender's own time: "October 27 at 3:14 PM". The site's number (expires: seven days
+  // from the cards, paying never extends it); said under every link, so nobody pays for a day that has already gone.
+  const untilWords = (iso) => { const t = Date.parse(iso || ''); if (!Number.isFinite(t)) return ''; try { return new Date(t).toLocaleString('en-US', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } };
   const CODE_SAYS = { used: "That code's used up.", expired: 'That code has run out.', unknown: "That code isn't one of ours.", limit: 'Too many tries. Give it a few minutes.' };
   let payWait = 0;
   function payNote(t) { const n = $('#sharePayNote'); if (n) { n.textContent = t || ''; n.hidden = !t; } }
@@ -11022,7 +11034,11 @@
     $('#shareCopy').hidden = false;
     $('#shareSend').hidden = !navigator.share;
     const lt = $('#shareLeft'), left = info && info.code && typeof info.left === 'number' ? info.left : -1;
-    if (lt && left >= 0) { lt.textContent = left ? (NUMW[left] || left) + ' more on your code.' : 'That was the last one on your code.'; lt.hidden = false; }
+    const pencil = [];
+    if (left >= 0) pencil.push(left ? (NUMW[left] || left) + ' more on your code.' : 'That was the last one on your code.');
+    const when = untilWords(info && info.expires);
+    if (when) pencil.push('Good until ' + when + '. Send it before then.');
+    if (lt && pencil.length) { lt.textContent = pencil.join(' '); lt.hidden = false; }
     $('#shareCopy').onclick = async () => {
       try { await navigator.clipboard.writeText(link); $('#shareCopy').textContent = 'Copied'; }
       catch (e) { const li = $('#shareLink'); li.focus(); li.select(); try { document.execCommand('copy'); $('#shareCopy').textContent = 'Copied'; } catch (e2) { /* select is enough */ } }
@@ -11047,7 +11063,10 @@
     const box = $('#sharePay'), list = $('#sharePrices');
     const prices = (Array.isArray(j.prices) ? j.prices : []).filter((p) => p && HAUNT_RE.test(String(p.url)) && /^\d{1,3}\.\d\d$/.test(String(p.price)));
     if (!box || !list || !prices.length || !/^[a-f0-9]{48}$/.test(String(j.key))) { $('#shareReady').textContent = "It didn't take. Try again in a minute."; return; }
-    $('#shareReady').textContent = 'It knows ' + name + ' now. Pay, and the link is yours.';
+    // how long the link lives is the site's number (days: INVITE_DAYS), said before the money
+    const days = Math.floor(Number(j.days)) > 0 ? Math.floor(Number(j.days)) : 0;
+    const life = days === 1 ? ' for one day' : days ? ' for ' + (NUMW[days] ? NUMW[days].toLowerCase() : days) + ' days' : '';
+    $('#shareReady').textContent = 'It knows ' + name + ' now. Pay, and the link is yours' + life + '.';
     $('#shareLink').hidden = true;
     payNote(CODE_SAYS[j.code] || '');
     list.innerHTML = '';
@@ -11216,6 +11235,10 @@
     const el = $('#warn'); if (!el) return;
     if (/[?&](debug|quiet)\b/.test(location.search) && !/[?&]warn\b/.test(location.search)) return;
     const seen = +store.get('warned', 0) || 0;
+    // the card comes up as its ghost from the first frame: its picture used to fade in readable for a second before the smudge covered it,
+    // which read as the card going away on its own (Pierce, 2026-10-20: "it shows the opening card ... and then promptly loses it before I
+    // click"). Now nothing readable shows until the first touch writes it in.
+    el.classList.add('unwritten');
     el.hidden = false;
     let gone = false;
     // The card is written in by hand (Pierce, 2026-10-10: "a button so we can see/hear the before you sit down message being written"): his card
