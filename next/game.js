@@ -9463,11 +9463,12 @@
     const stop = wantsToStop(q), family = askedForFamily(q);
     // a name somebody gave in their own words, read only now that the safety checks have passed it (never from a wish to stop or a
     // question for family). The demon reads it in what they typed; the board may spell it once a night. A bare name is one too when it
-    // answers the demon's question and nobody is seated yet: the first move asks who is here, and "Pierce" alone is the answer (the site
-    // then knows who is typing, and never reads their own name as someone in their life).
+    // answers the demon's question, nobody is seated yet, and it is the night's first typed line: the first move asks who is here, and
+    // "Pierce" alone is the answer (the site then knows who is typing, and never reads their own name as someone in their life). The
+    // site's own rule (lone): a bare name typed later, to WHO IS WITH YOU, is someone in their life, never the one typing.
     if (own && !stop && !family && !forbiddenAsk(q)) {
       const lastT = NIGHT.turns[NIGHT.turns.length - 1], asked = !!(lastT && lastT.r && (lastT.r.asks === 'answer' || lastT.r.asks === 'choose'));
-      const vn = volunteeredName(q, asked && !NAMES.length);
+      const vn = volunteeredName(q, asked && !NAMES.length && !NIGHT.turns.some((t) => t.q && !t.part));
       if (vn) takeName(vn, 'said');
     }
     // a question about whether it can see them: both faces look straight at them
@@ -10711,7 +10712,8 @@
     if (v && !S.ending && (S.busy || S.possessing || S.struggling || (S.started && !S.opened) || (deadNow() && !outright(v)))) {
       if (!enqueue(v, true, outright(v))) { q.classList.add('full'); setTimeout(() => q.classList.remove('full'), 400); trollQueueFull(); return; }
       q.value = ''; q.blur();
-      giveWay();
+      // (the first move is never given way to: it is paid for and the night opens on it; the line waits for it and is answered next)
+      if (S.opened) giveWay();
       return;
     }
     if (v && S.ending) return;   // the night is ending: what they wrote stays in the box
@@ -11238,10 +11240,6 @@
     const el = $('#warn'); if (!el) return;
     if (/[?&](debug|quiet)\b/.test(location.search) && !/[?&]warn\b/.test(location.search)) return;
     const seen = +store.get('warned', 0) || 0;
-    // the card comes up as its ghost from the first frame: its picture used to fade in readable for a second before the smudge covered it,
-    // which read as the card going away on its own (Pierce, 2026-10-20: "it shows the opening card ... and then promptly loses it before I
-    // click"). Now nothing readable shows until the first touch writes it in.
-    el.classList.add('unwritten');
     el.hidden = false;
     let gone = false;
     // The card is written in by hand (Pierce, 2026-10-10: "a button so we can see/hear the before you sit down message being written"): his card
@@ -11294,7 +11292,9 @@
         next();
       });
     };
-    if (img) { const pic = new Image(); pic.onload = () => { CARD.pic = pic; el.classList.add('unwritten'); place(); if (bands()) paint([], null, 0); }; pic.src = img.getAttribute('src'); }   // (the card is on screen at once, its ink smudged, before any touch)
+    // The card stays as it is printed, readable, until they click, and the click goes on (Pierce, 2026-10-20: it showed, then smudged itself
+    // before he clicked; then "lame" to a card that started smudged). The written-in-by-hand version stays for the reel (__writeCard).
+    if (img) { const pic = new Image(); pic.onload = () => { CARD.pic = pic; CARD.written = true; }; pic.src = img.getAttribute('src'); }   // (the card is on screen at once, its ink smudged, before any touch)
     addEventListener('resize', () => { if (!el.hidden) { place(); if (!CARD.written && !CARD.writing && bands()) paint([], null, 0); } });
     // the reel: the card over whatever is on, written again, then gone (window.GOODBYE.writeCard)
     window.__writeCard = async () => { el.hidden = false; el.classList.remove('out'); gone = false; CARD.written = false; CARD.writing = false; el.classList.add('unwritten'); if (ink) ink.getContext('2d').clearRect(0, 0, ink.width, ink.height); place(); await write(); };
